@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=OptiDX Desktop
+Comment=Manage Linux game HDR mods and upscalers
+Exec=optidx-desktop
+Icon=optidx-desktop
+Terminal=false
+Categories=Game;
