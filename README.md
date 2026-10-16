@@ -6,9 +6,17 @@ Find your games, choose the components you want, install them before playing, an
 
 > Looking for the original launch script? **[Cha1N1/OptiDX](https://github.com/Cha1N1/OptiDX) remains the script-only project.** OptiDX Desktop is developed separately and includes its own adapted backend. You do not need to install the old script to use Desktop.
 
-![OptiDX Desktop showing component selection](docs/screenshots/desktop.png)
+![OptiDX Desktop 0.3.5 with its near-black theme and HelixSR DLL picker](docs/screenshots/desktop.png)
 
 *Interface preview with a sample library. Dark is the default; Light and System colors are also available.*
+
+## What’s new in 0.3.5
+
+- **Refreshed interface:** white accents on near-black blue, a matching header icon, clearer spacing and consistent controls.
+- **Standalone HelixSR:** choose your locally built x64 DLL with the compact Browse field. No separate weights or kernels are needed. HelixSR and Cyboman FSR are mutually exclusive, with visible explanations for disabled choices.
+- **Visible maintenance actions:** update and uninstall stay on the main Installation page.
+- **Faster AppImage startup:** gzip packaging and less repeated work before the window appears.
+- **Smoother navigation:** accelerated scrolling, short transitions, retained drafts and Dark / Light / System appearance options.
 
 ## Features
 
@@ -19,7 +27,7 @@ Find your games, choose the components you want, install them before playing, an
 - **Linux launch profiles:** configure Wine/Proton/UMU runners, prefixes, arguments and environment overrides, plus optional Gamescope, vkBasalt, DXVK and KDE HDR controls.
 - **Updates and recovery:** preview bulk updates, exclude games or components, inspect job logs and backups, and verify retained snapshots before restoring recorded files.
 - **A persistent workspace:** per-game drafts, saved layouts, fast navigation, accelerated smooth scrolling and an optional reduced-motion mode.
-- **Dark, Light or System:** keep the original navy/teal appearance, use a light palette, or follow your actual Qt colors, including custom KDE color schemes.
+- **Dark, Light or System:** use white accents on a near-black blue background, use a light palette, or follow your actual Qt colors, including custom KDE color schemes.
 
 Optional tools include frame limiters, OptiPatcher, RE Framework, an eligible Unreal Engine DOF fix and experimental neural-rendering adapters. See [feature coverage and limitations](docs/RHI_PARITY.md) for the detailed breakdown.
 
@@ -27,18 +35,18 @@ Optional tools include frame limiters, OptiPatcher, RE Framework, an eligible Un
 
 ### AppImage — recommended
 
-Download `OptiDX-Desktop-0.3.4-x86_64.AppImage` and its `.sha256` file from the **Releases** page of this Desktop repository. Put both files in the same directory, then run:
+Download `OptiDX-Desktop-0.3.5-x86_64.AppImage` and its `.sha256` file from [GitHub Releases](https://github.com/Cha1N1/OptiDX-Desktop/releases) when the 0.3.5 assets are published. Put both files in the same directory, then run:
 
 ```bash
-sha256sum -c OptiDX-Desktop-0.3.4-x86_64.AppImage.sha256
-chmod +x OptiDX-Desktop-0.3.4-x86_64.AppImage
-./OptiDX-Desktop-0.3.4-x86_64.AppImage
+sha256sum -c OptiDX-Desktop-0.3.5-x86_64.AppImage.sha256
+chmod +x OptiDX-Desktop-0.3.5-x86_64.AppImage
+./OptiDX-Desktop-0.3.5-x86_64.AppImage
 ```
 
 If FUSE is unavailable:
 
 ```bash
-./OptiDX-Desktop-0.3.4-x86_64.AppImage --appimage-extract-and-run
+./OptiDX-Desktop-0.3.5-x86_64.AppImage --appimage-extract-and-run
 ```
 
 The AppImage bundles Python, Qt and the download/archive tools. Your graphics drivers, game launcher and Wine/Proton runner come from your system. Optional integrations such as Gamescope and vkBasalt require their host tools to be installed.
@@ -90,9 +98,9 @@ RenoDX/Luma need selected or existing ReShade; HelixSR needs selected or existin
 
 ### FSR and HelixSR
 
-New profiles select **Cyboman lossy FSR** and leave **HelixSR off**. Existing explicit choices are retained. The FSR component deploys the lossy upscaler DLL; it does not implicitly install ReShade, HDR addons or OptiScaler.
+New profiles select **Cyboman lossy FSR** and leave **HelixSR off**. HelixSR and Cyboman cannot be selected together; untick the active choice before switching. The FSR component deploys the lossy upscaler DLL; it does not implicitly install ReShade, HDR addons or OptiScaler.
 
-HelixSR uses prepared local assets; the app does not compile weights during game startup. To switch an existing managed setup back to direct FSR, use **Installation → Update or remove this game's setup → Remove HelixSR / restore direct FSR4**. The lossy FSR DLL must already be present. Restart the game after changing DLL routing.
+When HelixSR is checked, choose your locally built Windows x64 FSR DLL in the path field below it. Current HelixSR builds need only the DLL; separate weights and kernels are not required. The DLL replaces `OptiScaler/amd_fidelityfx_upscaler_dx12.dll` directly, without renaming it to `helixsr.dll` or creating a HelixSR subfolder. A verified backup retains the replaced DLL. The path is saved per game and included in drafts; the app does not compile weights during game startup. Update and uninstall buttons are always visible on Installation. To switch an existing managed setup back to direct FSR, use **Installation → Remove HelixSR / restore previous AMD DLL**. This restores the replaced DLL when a verified backup exists; if no previous DLL existed, it removes HelixSR without inventing a replacement. Remove the managed HelixSR replacement before installing Cyboman. Restart the game after changing DLL routing.
 
 ### Launch settings
 
@@ -120,7 +128,7 @@ or, by default:
 ~/.local/share/optidx-desktop
 ```
 
-This contains the library cache, profiles, drafts, settings, job history, logs and backups. Download caches and prepared HelixSR assets use their existing OptiDX XDG locations. Personal library data, profiles and prepared weights are not included in the AppImage.
+This contains the library cache, profiles, drafts, settings, job history, logs and backups. Download caches and prepared HelixSR assets use their existing OptiDX XDG locations. Personal library data, profiles and user-supplied DLLs are not included in the AppImage.
 
 ## Compatibility and current limits
 
@@ -134,7 +142,7 @@ This is an **early public release for Linux x86_64**. The full component stack t
 - Windows driver-profile features such as RTX HDR and Smooth Motion are not implemented.
 - Cross-distribution and older-CPU AppImage compatibility, every upstream live download source and actual gameplay compatibility have not been comprehensively validated.
 
-Current validation includes **158 automated tests**, bundled-Python tests, temporary-folder deployment/recovery checks and native Wayland AppImage startup. These checks do not replace testing a particular game and mod combination. See [current feature status](docs/RHI_PARITY.md) and [release notes](RELEASE_NOTES.md).
+Current validation includes **165 automated tests**, bundled-Python tests, temporary-folder deployment/recovery checks and native Wayland AppImage startup. These checks do not replace testing a particular game and mod combination. See [current feature status](docs/RHI_PARITY.md) and [release notes](RELEASE_NOTES.md).
 
 ## Troubleshooting and bug reports
 
