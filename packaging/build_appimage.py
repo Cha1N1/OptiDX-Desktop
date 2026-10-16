@@ -218,12 +218,12 @@ def build(args):
                 "qt": QLibraryInfo.version().toString(), "pyside": PySide6.__version__,
                 "build_platform": platform.platform(), "private_loader": True,
                 "bundled_libraries": sorted(copied), "host_graphics_libraries": sorted(excluded),
-                "runtime": runtime_record}
+                "runtime": runtime_record, "compression": args.compression}
     (data / "BUILD_INFO.json").write_text(json.dumps(manifest, indent=2) + "\n")
     image = destination / f"OptiDX-Desktop-{version}-x86_64.AppImage"
     pending_image = destination / ("." + image.name + ".pending")
     pending_image.unlink(missing_ok=True)
-    command = [tool, "--no-appstream", "--comp", "xz"]
+    command = [tool, "--no-appstream", "--comp", args.compression]
     if runtime_file:
         command += ["--runtime-file", str(runtime_file)]
     command += [str(appdir), str(pending_image)]
@@ -241,6 +241,8 @@ def build(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output")
+    parser.add_argument("--compression", choices=("gzip", "xz"), default="gzip",
+                        help="SquashFS compression (default: gzip for faster startup)")
     parser.add_argument("--runtime-file", help="Official AppImage type-2 runtime binary")
     parser.add_argument("--runtime-source", help="Local type-2 AppImage to reuse its runtime executable only")
     build(parser.parse_args())

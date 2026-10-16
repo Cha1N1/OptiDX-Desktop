@@ -44,10 +44,10 @@ class ThemeTests(unittest.TestCase):
         combo.setCurrentIndex(combo.findData(mode))
         self.app.processEvents()
 
-    def test_default_dark_preserves_original_colors_and_unknown_values_are_safe(self):
+    def test_default_dark_uses_navy_colors_and_unknown_values_are_safe(self):
         self.assertEqual(self.window.theme.mode, 'dark')
         self.assertEqual(self.window.theme.effective, 'dark')
-        self.assertEqual(self.window.palette().color(QPalette.ColorRole.Window).name(), '#11151c')
+        self.assertEqual(self.window.palette().color(QPalette.ColorRole.Window).name(), '#090c12')
         self.assertEqual(resolved_theme('invalid'), 'dark')
         self.assertEqual(resolved_theme([]), 'dark')
 
@@ -109,7 +109,7 @@ class ThemeTests(unittest.TestCase):
             self.assertEqual(another.theme.mode, 'dark')
             self.assertEqual(another.features.theme_choice.count(), 3)
             self.assertEqual(read_json(self.repo.directory / 'settings.json'), {'theme': 'dark', 'future': True})
-            self.assertEqual(another.palette().color(QPalette.ColorRole.Window).name(), '#11151c')
+            self.assertEqual(another.palette().color(QPalette.ColorRole.Window).name(), '#090c12')
         finally:
             another.close(); another.deleteLater()
 

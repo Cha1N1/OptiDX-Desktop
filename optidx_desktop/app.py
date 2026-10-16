@@ -111,7 +111,6 @@ class MainWindow(WorkflowMixin, QMainWindow):
         self.theme = ThemeController(self, STYLE)
         self.build_ui()
         self.features.load({})
-        self.populate()
         self.setup_workflow()
         from .motion import PageMotion
         self.page_motion = PageMotion(self.tabs)
@@ -131,7 +130,15 @@ class MainWindow(WorkflowMixin, QMainWindow):
         title = QVBoxLayout()
         brand = QLabel("OptiDX Desktop")
         brand.setObjectName("brand")
-        title.addWidget(brand)
+        brand_row = QHBoxLayout()
+        logo = QLabel()
+        app_icon = QIcon(str(Path(__file__).parent / "assets/app.svg"))
+        self.setWindowIcon(app_icon)
+        logo.setPixmap(app_icon.pixmap(36, 36))
+        brand_row.addWidget(logo)
+        brand_row.addWidget(brand)
+        brand_row.addStretch()
+        title.addLayout(brand_row)
         subtitle = QLabel("HDR, upscaling and game mods on Linux.")
         subtitle.setObjectName("subtitle")
         title.addWidget(subtitle)
@@ -235,7 +242,8 @@ class MainWindow(WorkflowMixin, QMainWindow):
         utilities.addWidget(button("Copy diagnostics", self.copy_report))
         status.addLayout(utilities)
         status.addWidget(button("Change installation executable", self.change_executable))
-        maintenance = section(overview, "Update or remove this game's setup", expanded=False)
+        maintenance = QVBoxLayout()
+        overview.insertLayout(2, maintenance)
         self.maintenance_box = maintenance
         update_hint = QLabel("Update refreshes selected components and previously installed optional tools. It does not install unchecked shader packs or new extras.")
         update_hint.setWordWrap(True)
@@ -254,6 +262,12 @@ class MainWindow(WorkflowMixin, QMainWindow):
         installation_layout.addWidget(self.scroll_page(self.overview), 1)
         installation_layout.addWidget(self.install_summary)
         installation_layout.addWidget(self.install_button)
+        maintenance.removeWidget(self.update_button)
+        maintenance.removeWidget(self.remove_button)
+        management_actions = QHBoxLayout()
+        management_actions.addWidget(self.update_button)
+        management_actions.addWidget(self.remove_button)
+        installation_layout.addLayout(management_actions)
         self.tabs.addTab(installation_page, "Installation")
         settings = QWidget()
         settings_box = QVBoxLayout(settings)
@@ -261,8 +275,17 @@ class MainWindow(WorkflowMixin, QMainWindow):
         self.components = {}
         self.component_status_labels = {}
         component_card, component_box = card("Components to install")
-        component_grid = QGridLayout()
-        component_box.addLayout(component_grid)
+        component_card.setMaximumWidth(720)
+        component_columns = QHBoxLayout()
+        component_columns.setSpacing(18)
+        component_box.addLayout(component_columns)
+        columns = []
+        for _ in range(2):
+            column = QVBoxLayout()
+            column.setSpacing(12)
+            column.setAlignment(Qt.AlignmentFlag.AlignTop)
+            component_columns.addLayout(column, 1)
+            columns.append(column)
         for index, (key, label) in enumerate(COMPONENT_LABELS.items()):
             checkbox = QCheckBox(label)
             if key == "helixsr":
@@ -280,7 +303,27 @@ class MainWindow(WorkflowMixin, QMainWindow):
             status_label.setObjectName("muted")
             cell_box.addWidget(status_label)
             self.component_status_labels[key] = status_label
-            component_grid.addWidget(cell, index // 2, index % 2)
+            columns[index % 2].addWidget(cell, 0, Qt.AlignmentFlag.AlignTop)
+        self.helixsr_picker = QWidget()
+        helix_box = QVBoxLayout(self.helixsr_picker)
+        helix_box.setContentsMargins(0, 6, 0, 4)
+        helix_box.addWidget(QLabel("Locally built HelixSR FSR DLL"))
+        helix_row = QHBoxLayout()
+        self.helixsr_dll = QLineEdit()
+        self.helixsr_dll.setPlaceholderText("Path to the built HelixSR DLL")
+        self.helixsr_dll.setToolTip("Choose the standalone Windows x64 HelixSR FSR DLL.")
+        self.helixsr_dll.setMinimumWidth(0)
+        self.helixsr_dll.setMaximumWidth(200)
+        self.helixsr_dll.setFixedHeight(32)
+        self.helixsr_dll.textChanged.connect(self.refresh_install_summary)
+        helix_row.addWidget(self.helixsr_dll, 1)
+        helix_row.addWidget(button("Browse…", self.browse_helixsr))
+        helix_row.addStretch()
+        helix_box.addLayout(helix_row)
+        self.components["helixsr"].parentWidget().layout().addWidget(self.helixsr_picker)
+        self.helixsr_picker.hide()
+        for key in ("helixsr", "amd_fsr"):
+            self.components[key].toggled.connect(lambda checked, key=key: self.select_upscaler(key, checked))
         self.prune_components = QCheckBox("Remove unchecked managed components")
         self.prune_components.setToolTip("On installation/update, remove unchecked core components previously installed by OptiDX. Unrelated files are preserved.")
         self.prune_components.toggled.connect(self.refresh_install_summary)
@@ -289,7 +332,10 @@ class MainWindow(WorkflowMixin, QMainWindow):
         component_hint.setWordWrap(True)
         component_hint.setObjectName("muted")
         component_box.addWidget(component_hint)
-        overview.insertWidget(1, component_card)
+        component_row = QHBoxLayout()
+        component_row.addWidget(component_card, 1)
+        component_row.addStretch()
+        overview.insertLayout(1, component_row)
         settings_box.addWidget(QLabel("Change installed configuration"))
         self.hdr = QCheckBox("Write native HDR settings to Unreal Engine.ini (RenoDX native HDR path)")
         self.hdr.toggled.connect(self.refresh_install_summary)
@@ -391,6 +437,27 @@ class MainWindow(WorkflowMixin, QMainWindow):
         area.setWidget(widget)
         return area
 
+    def browse_helixsr(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Choose locally built HelixSR FSR DLL", self.helixsr_dll.text(), "Windows DLL (*.dll);;All files (*)")
+        if path:
+            self.helixsr_dll.setText(path)
+
+    def select_upscaler(self, key, checked):
+        other = "amd_fsr" if key == "helixsr" else "helixsr"
+        if checked:
+            self.components[other].setChecked(False)
+        for name in ("helixsr", "amd_fsr"):
+            opposite = "amd_fsr" if name == "helixsr" else "helixsr"
+            blocked = self.components[opposite].isChecked()
+            self.components[name].setEnabled(not blocked)
+            label = "HelixSR" if opposite == "helixsr" else "Cyboman FSR"
+            hint = f"Unavailable while {label} is selected. Untick {label} to switch." if blocked else ""
+            self.components[name].setToolTip(hint)
+            status = self.component_status_labels[name]
+            status.setProperty("blocked_choice", hint)
+        self.helixsr_picker.setVisible(self.components["helixsr"].isChecked())
+        self.refresh_install_summary()
+
     def refresh_install_summary(self, *unused):
         if not hasattr(self, "components"):
             return
@@ -471,8 +538,7 @@ class MainWindow(WorkflowMixin, QMainWindow):
         self.stat_labels[1].setText(str(installed_count))
         from .backend import load_backend
         helix = load_backend().HELIXSR_DIR
-        ready = all((helix / n).is_file() and (helix / n).stat().st_size > 0
-                    for n in ["amd_fidelityfx_dx12.dll", "helixsr_weights.bin", "helixsr_kernels.pak"])
+        ready = (helix / "amd_fidelityfx_upscaler_dx12.dll").is_file()
         self.stat_labels[2].setText("Available" if ready else "Not prepared")
         if self.list.currentItem() is None and self.list.count():
             first = next((i for i in range(self.list.count()) if "Installed" in self.list.item(i).text()), 0)
@@ -536,6 +602,7 @@ class MainWindow(WorkflowMixin, QMainWindow):
             selected = {"reshade", "renodx"}
         for name, checkbox in self.components.items():
             checkbox.setChecked(name in selected)
+        self.helixsr_dll.setText(profile.get("helixsr_dll", ""))
         self.prune_components.setChecked(profile.get("prune_components", False))
         self.hdr.setChecked(profile.get("native_hdr", True))
         self.include_updates.setChecked(profile.get("include_updates", True))
@@ -549,7 +616,7 @@ class MainWindow(WorkflowMixin, QMainWindow):
         return {"components": {name: box.isChecked() for name, box in self.components.items()},
                 "prune_components": self.prune_components.isChecked(), "native_hdr": self.hdr.isChecked(),
                 "include_updates": self.include_updates.isChecked(), "prefix": self.prefix.text().strip(),
-                "config_dir": self.config_dir.text().strip(),
+                "config_dir": self.config_dir.text().strip(), "helixsr_dll": self.helixsr_dll.text().strip(),
                 **{key: combo.currentData() for key, combo in self.fg.items()}, **self.features.preferences()}
 
     def save_profile(self):

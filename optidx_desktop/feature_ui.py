@@ -202,9 +202,9 @@ class Features:
         layout.addStretch()
 
     def build_extras(self):
-        self.remove_helix_button = push('Remove HelixSR / restore direct FSR4', self.remove_helixsr)
+        self.remove_helix_button = push('Remove HelixSR / restore previous AMD DLL', self.remove_helixsr)
         self.window.maintenance_box.insertWidget(0, self.remove_helix_button)
-        helix_hint = help_label('This removes only managed HelixSR files, reconnects the existing lossy FSR DLL directly, and unchecks HelixSR for future updates. Simply unchecking a component leaves its files installed.')
+        helix_hint = help_label('This removes managed HelixSR and restores the previous AMD upscaler DLL when a verified backup exists. It unchecks HelixSR for future updates. Simply unchecking a component leaves its files installed.')
         self.window.maintenance_box.insertWidget(1, helix_hint)
         layout = section(self.window.installation_box, 'Component download sources and advanced detection', expanded=False)
         layout.addWidget(help_label('Choose download sources for checked OptiScaler and ReShade components. Installation uses these choices; this section has no separate installer.'))

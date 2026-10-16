@@ -65,8 +65,8 @@ a Git repository. Skip `git init`; inspect its remotes before adding an `origin`
 Attach these files as assets of a GitHub **Release** in the Desktop repository:
 
 ```text
-OptiDX-Desktop-0.3.4-x86_64.AppImage
-OptiDX-Desktop-0.3.4-x86_64.AppImage.sha256
+OptiDX-Desktop-0.3.5-x86_64.AppImage
+OptiDX-Desktop-0.3.5-x86_64.AppImage.sha256
 ```
 
 Keep executable builds out of the source commit. A clean source archive can also

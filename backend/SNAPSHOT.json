@@ -3,10 +3,13 @@
   "version": "2.1.2-desktop.1",
   "upstream_version": "2.1.2",
   "upstream_sha256": "05d1b72cfdb9aba06baed79b0c340a910b73db02df80fadda0eb26bd86c785a1",
-  "sha256": "38d52f139c06789c35e52e83f801ce985cff82f71a88239f480ec031d22a8520",
+  "sha256": "a63f8870f58454aa485fb799910bf0c0fdaba86d6e0fe07baaa64160b4cfa042",
   "changes": [
     "Independent component selection and ownership",
     "Official Cyboman lossy archive downloads",
-    "Selected-only updates and selective removal"
+    "Selected-only updates and selective removal",
+    "User-selected local HelixSR DLL and mutually exclusive HelixSR/Cyboman installation",
+    "Standalone DLL-only HelixSR deployment without external weights or kernels",
+    "Deploy HelixSR directly as OptiScaler/amd_fidelityfx_upscaler_dx12.dll; migrate managed legacy files and retain verified replacement recovery"
   ]
 }

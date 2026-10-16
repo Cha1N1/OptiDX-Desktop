@@ -285,3 +285,173 @@ Prepared a clean source folder/archive under dist using Git's non-ignored source
 list, excluding .git, build output, binaries and caches. No commit, push, new remote
 or publication was performed. Source cleanup/documentation does not change app
 behavior and needs no AppImage rebuild or another full suite.
+
+## Startup timing investigation — 2026-10-15
+
+User reports about 2–3 seconds to open. Running binary is now
+`/home/DwE/AppImages/optidx_desktop.appimage`, matching the last local 0.3.4 checksum;
+the dist copy was moved, not deleted by source cleanup. Do not overwrite that
+external application path without a task authorizing it.
+
+Read-only source profiling used a temporary copy of app metadata, with background
+services disabled and scanning off. The cached 49-game library took about 0.386 s
+to construct and 0.076 s to show; two populate calls totaled about 0.09 s. A fresh
+empty-data source probe took 0.467 s through first render. Running the packaged
+interpreter from the already-mounted image took 0.680 s through first render.
+
+Fresh normal AppImage probes took about 4.42–4.51 s to save a preview, including
+the built-in 250 ms preview timer (rough first-show estimate 4.17–4.26 s), under
+offscreen and native Wayland. Complete process timing was about 4.5–4.65 s.
+FUSE-free extraction plus preview took about 8.0–8.1 s. Measurements are local,
+cache-dependent and not a controlled cold-start benchmark. No game scan, game
+launch, real-game mutation or original app-state writes were performed.
+
+Current packaging uses XZ compression; per-mount runtime/dependency loading is
+the main measured difference, not library scanning. UI also eagerly builds all
+pages and populates twice; those are secondary opportunities. Future optimization
+should benchmark faster SquashFS compression and reduce pre-show work before
+claiming a speedup. No performance code or package was changed by this investigation.
+
+## Startup optimization — 2026-10-15
+
+Switched AppImage default compression from XZ to gzip; this installed appimagetool
+explicitly rejects zstd. Added --compression xz as an opt-in size tradeoff and
+recorded compression in BUILD_INFO.json. Removed the early duplicate populate()
+and blocked search/filter/sort signals while restoring workspace state before
+the single initial population. All pages still construct eagerly: a lazy-page
+refactor was unnecessary for the measured main bottleneck and is deferred.
+
+Repeated normal FUSE offscreen preview probes with fresh temporary app data:
+old image 4.424/4.384 s, new image 1.240/1.229 s to saved preview, including the
+250 ms timer. New image is 64.4 MiB. Measurements are cache-dependent, with no
+scanning or real-game changes. Built local 0.3.4 in dist; did not overwrite the
+user's /home/DwE/AppImages/optidx_desktop.appimage. Version unchanged.
+Added a regression covering saved search/favourite filter/sort/page/draft restore
+and working filter signals after construction. Source offscreen preview inspected;
+checksum, FUSE-free runtime info and backend help passed.
+Final validation: all 159 tests passed with both the source and bundled Python;
+normal native Wayland packaged preview also passed. No gameplay/download claims.
+
+## HelixSR picker and Installation styling — 2026-10-16
+
+HelixSR selection reveals a per-game DLL path and Browse button directly under
+its checkbox. The path participates in profile saving and retained drafts. GUI
+install/update binds the chosen local x64 Windows DLL to the queued job; prepared
+helixsr_weights.bin and helixsr_kernels.pak must sit beside it. Custom filenames
+are accepted and copied to the existing tracked HelixSR runtime names. No weight
+compilation or downloads were introduced. Existing explicit conflicting profiles
+normalize to HelixSR in the UI; the installer rejects selecting both HelixSR and
+Cyboman lossy FSR. Untick the active choice to enable the alternative checkbox.
+Unchecked installed files retain the existing explicit-pruning behavior.
+
+Update and removal buttons are pinned below Installation alongside the main
+install action, outside collapsible sections. Added the app icon beside the
+header name, changed Dark to white accents/navy backgrounds, and recolored both
+source and packaged app SVGs. Light and actual System Qt palettes remain.
+Backend snapshot checksum/change description updated; upstream provenance retained.
+Built local 0.3.4 AppImage without version bump or publication. Tests use temporary
+game folders only; actual latest HelixSR gameplay is not established by fixtures.
+
+## Near-black dark palette — 2026-10-16
+
+Darkened the blue palette at user request: window #090c12, input/list backgrounds
+#0d111a, cards #121823, and darker blue button/selection surfaces. White accents
+remain. Both logo backgrounds match the window. Light/System unchanged.
+Rebuilt local 0.3.4 AppImage; no version bump or publication.
+Validation: 162 source tests pass; all 9 theme tests pass with bundled Python.
+Fresh source and FUSE-free packaged previews pass and were checked; checksum OK.
+
+## Standalone HelixSR correction — 2026-10-16
+
+User clarified current HelixSR is a standalone DLL. Removed external weights and
+kernel checks and copying from the adapter and bundled backend. Local DLL x64 PE
+validation remains; canonical installed runtime copies, routing and ownership
+remain. Global prepared-HelixSR indicator now checks the DLL alone. Existing
+managed/unmanaged companion files are preserved rather than deleted implicitly.
+Updated backend snapshot checksum and description, preserving upstream provenance.
+
+Picker input is capped at 200 px and 32 px high with Browse beside it. Disabled
+HelixSR/Cyboman checkboxes and indicators are visibly dimmed; the status explains
+which selected alternative to untick, also available as a tooltip. Tests now use
+DLL-only fixtures and cover architecture rejection, standalone deployment and
+visible mutual-exclusion messaging. README and release notes corrected; earlier
+checkpoint entries describe historical companion-file behavior.
+Validation: all 162 tests pass with source and bundled Python. Synthetic HelixSR
+picker preview inspected; FUSE-free package preview/backend help and checksum
+pass. Rebuilt local 0.3.4 AppImage; no version bump, publication or real-game writes.
+
+## Version 0.3.5 and README refresh — 2026-10-16
+
+User requested a version bump and refreshed public README. Set package version to
+0.3.5, promoted the accumulated unreleased notes to the 0.3.5 entry, and updated
+README/packaging/publishing filename examples. README highlights current UI,
+standalone HelixSR/mutual exclusion, visible maintenance actions and faster startup;
+validation count updated to 162. Release download link points to Desktop GitHub
+and explicitly says assets are available when published; nothing was published.
+
+Replaced docs/screenshots/desktop.png with a 1500x1000 source render using a fresh
+temporary five-game example library, synthetic executable fixtures and display
+paths. It shows white/near-black styling, the DLL picker and disabled-choice
+explanation, plus 0.3.5 in the footer. No personal library data was included and no
+real game files were modified. Built dist/OptiDX-Desktop-0.3.5-x86_64.AppImage and
+checksum; older local images remain. No commit/push/release publication performed.
+0.3.5 validation: all 162 tests passed with bundled Python. The source full run
+had one animation-completion timing failure while both suites ran concurrently;
+all three motion tests passed on immediate focused rerun. No behavior change was
+made for that timing failure. FUSE-free --version reports 0.3.5; packaged preview,
+backend help and checksum passed. The refreshed README screenshot was inspected.
+
+## HelixSR component-card spacing — 2026-10-16
+
+User clarified the unwanted space was on the right. Capped the component card at
+720 logical pixels and left-aligned it through a flexible row so narrow windows
+can still use available width. Also replaced shared grid rows with independently
+stacked columns; opening the picker no longer expands Cyboman's cell or pushes
+DLSS below the taller neighbouring cell. New geometry regression checks both
+cell spacing and the card-width cap on a wide window. Synthetic 1800/1500-pixel
+previews inspected, README screenshot refreshed, current test count now 163.
+Rebuilt 0.3.5 locally with no further version bump or publication.
+Final checks: all 163 source tests pass, all 15 workflow/layout tests pass with
+bundled Python; FUSE-free package preview, backend help and checksum pass.
+
+## Correct HelixSR deployment layout — 2026-10-16
+
+User corrected the runtime layout: standalone HelixSR replaces
+OptiScaler/amd_fidelityfx_upscaler_dx12.dll directly. Replaced the old installer;
+no new HelixSR subfolder, helixsr.dll duplicate, SR duplicate or forwarding DLL is
+created. Removed forwarding repair code and launch-time repair calls. Library
+routing uses the standard AMD path; managed legacy routing is reset on migration.
+
+Installation retains the replaced AMD DLL in a tracked hidden .bin backup with
+SHA-256, original mode and previous owner in OptiScaler/.optidx-helixsr.json.
+Subsequent updates retain that original. Targeted removal verifies it before any
+writes, restores it with ownership/mode, and removes replacement metadata. With
+no previous DLL, targeted removal removes HelixSR and resets its routing instead.
+Full uninstall continues to restore verified baseline originals. Remove managed
+HelixSR before installing Cyboman so the recovery chain is not overwritten.
+
+Only tracked legacy subfolder files are deleted during a successful install;
+unmanaged files/logs remain. Empty legacy directory is removed. Legacy removal
+support remains for cleanup of earlier installs. Direct HelixSR and Cyboman are
+detected separately; source default now uses the standard AMD filename. Adapter
+still validates supplied Windows x64 DLLs; path/case/symlink checks and backup
+checksum validation protect replacement. Backend snapshot checksum updated while
+preserving upstream provenance. README, release notes, removal label/help and
+synthetic screenshot updated. Version remains 0.3.5; rebuilt local AppImage.
+
+New regressions cover exact direct path (no duplicate DLLs), legacy migration
+with retained user files, repeat update plus restored original ownership, distinct
+component detection and checksum-failure refusal on update/removal. No real game
+installations were touched; runtime/gameplay compatibility is not claimed.
+Final validation: all 165 tests pass with source and bundled Python. Fresh
+synthetic source preview and FUSE-free packaged preview/backend help pass;
+AppImage checksum and backend snapshot checksum verified.
+
+## Clean 0.3.5 source export — 2026-10-16
+
+Prepared dist/OptiDX-Desktop-0.3.5-source plus a tar.gz and SHA-256 for upload,
+using non-ignored source files and excluding Git metadata, build/dist output,
+Python caches, virtual environments and local state. Includes current direct-path
+HelixSR implementation, refreshed README/screenshot and provenance records.
+Export contents and backend snapshot checksum verified; no source behavior change,
+additional AppImage rebuild, commit, push or publication was required.

@@ -23,23 +23,31 @@ This local build used the static runtime extracted from an existing ML4W AppImag
 Output:
 
 ```text
-dist/OptiDX-Desktop-0.3.4-x86_64.AppImage
-dist/OptiDX-Desktop-0.3.4-x86_64.AppImage.sha256
+dist/OptiDX-Desktop-0.3.5-x86_64.AppImage
+dist/OptiDX-Desktop-0.3.5-x86_64.AppImage.sha256
 ```
 
 The unpacked AppDir and runtime build files live under `build/`. Third-party license files from installed packages are included under `usr/share/licenses`. Build/runtime versions and host graphics-library names are recorded in `usr/share/optidx-desktop/BUILD_INFO.json`.
 
+Gzip compression is the default to reduce startup decompression cost. Use
+`--compression xz` to prioritize a smaller download instead. The selected
+compression is recorded in `BUILD_INFO.json`. In local repeated offscreen preview
+checks, the previous XZ image took about 4.4 seconds and the gzip build about
+1.23 seconds (both include a 250 ms preview timer). These are cache-dependent
+local measurements, not a guarantee for other machines. The local appimagetool
+supports gzip and XZ; zstd is not supported by that builder.
+
 ## Use
 
 ```bash
-chmod +x OptiDX-Desktop-0.3.4-x86_64.AppImage
-./OptiDX-Desktop-0.3.4-x86_64.AppImage
+chmod +x OptiDX-Desktop-0.3.5-x86_64.AppImage
+./OptiDX-Desktop-0.3.5-x86_64.AppImage
 ```
 
 On systems without usable FUSE:
 
 ```bash
-./OptiDX-Desktop-0.3.4-x86_64.AppImage --appimage-extract-and-run
+./OptiDX-Desktop-0.3.5-x86_64.AppImage --appimage-extract-and-run
 ```
 
 Your existing `~/.local/share/optidx-desktop` profiles, `~/.cache/optidx` downloads, and `~/.local/share/optidx/helixsr` prepared files are reused. Keep the AppImage at a stable path if using it as a game wrapper.
@@ -49,11 +57,11 @@ Steam: **Copy launch options** emits a command using the persistent AppImage pat
 ## Checks
 
 ```bash
-./dist/OptiDX-Desktop-0.3.4-x86_64.AppImage --appimage-extract-and-run --runtime-info
-QT_QPA_PLATFORM=offscreen ./dist/OptiDX-Desktop-0.3.4-x86_64.AppImage --appimage-extract-and-run --screenshot /tmp/optidx-appimage.png
-./dist/OptiDX-Desktop-0.3.4-x86_64.AppImage --appimage-extract-and-run --backend --help
+./dist/OptiDX-Desktop-0.3.5-x86_64.AppImage --appimage-extract-and-run --runtime-info
+QT_QPA_PLATFORM=offscreen ./dist/OptiDX-Desktop-0.3.5-x86_64.AppImage --appimage-extract-and-run --screenshot /tmp/optidx-appimage.png
+./dist/OptiDX-Desktop-0.3.5-x86_64.AppImage --appimage-extract-and-run --backend --help
 cd dist
-sha256sum -c OptiDX-Desktop-0.3.4-x86_64.AppImage.sha256
+sha256sum -c OptiDX-Desktop-0.3.5-x86_64.AppImage.sha256
 ```
 
 This initial AppImage is built with the current CachyOS/Arch runtime packages and tested locally. Other distributions and older CPU targets have not been validated; cross-distribution testing should precede advertising broad compatibility.
@@ -69,7 +77,7 @@ GUI, not the environment passed to games or launchers. Restart an existing windo
 with the rebuilt AppImage to apply it. For explicit testing:
 
 ```bash
-QT_QPA_PLATFORM=wayland ./dist/OptiDX-Desktop-0.3.4-x86_64.AppImage --appimage-extract-and-run
+QT_QPA_PLATFORM=wayland ./dist/OptiDX-Desktop-0.3.5-x86_64.AppImage --appimage-extract-and-run
 ```
 
 Qt platform selection references: [Qt QPA](https://doc.qt.io/qt-6/qpa.html) and

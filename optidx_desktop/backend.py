@@ -166,6 +166,13 @@ def execute_backend(game, action, preferences, module=None):
             raise ValueError("Choose a ReShade channel with addon support for RenoDX/Luma.")
     configure_environment(game, preferences)
     module = module or load_backend()
+    if action in {"install", "update"} and "helixsr" in selected_components(effective):
+        if "amd_fsr" in selected_components(effective):
+            raise ValueError("Choose HelixSR or Cyboman lossy FSR, not both")
+        from .helixsr import local_source
+        source = local_source(effective.get("helixsr_dll", ""))
+        module.HELIXSR_SOURCE_DLL = source
+        module.HELIXSR_DIR = source.parent
     bind_target(module, game, preferences)
     from .channels import configure_backend
     from .storage import Repository

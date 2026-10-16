@@ -11,6 +11,17 @@ from .inspection import contained
 from .storage import read_json
 
 
+def local_source(value):
+    """Validate a standalone user-built x64 HelixSR DLL."""
+    from .inspection import pe_info
+    source = Path(value).expanduser() if value else None
+    if source is None or not source.is_file() or source.suffix.lower() != '.dll':
+        raise ValueError('Choose the locally built HelixSR FSR DLL.')
+    if pe_info(source)['machine'] != 0x8664:
+        raise ValueError('HelixSR requires a Windows x64 DLL.')
+    return source.resolve()
+
+
 def _originals(game, repository, paths):
     baseline = read_json(baseline_path(game, repository), {})
     if not baseline:
@@ -41,6 +52,48 @@ def remove(game, repository, preferences):
     paths = owners["helixsr"]
     if not paths:
         raise ValueError("No OptiDX-managed HelixSR files were found. Unmanaged installations must be removed manually.")
+    direct = 'OptiScaler/' + module.AMD_DLL_NAME
+    if direct in paths:
+        marker = 'OptiScaler/' + module.HELIXSR_STATE
+        backup = 'OptiScaler/.optidx-helixsr-original.bin'
+        if paths - {direct, marker, backup}:
+            raise ValueError('Unexpected HelixSR-owned path in direct installation')
+        for relative in paths:
+            if contained(game.target, relative).is_symlink():
+                raise ValueError('Refusing to remove a managed symlink: ' + relative)
+        record = read_json(contained(game.target, marker), {})
+        if record.get('layout') != 'direct':
+            raise ValueError('HelixSR replacement metadata is missing')
+        original = None
+        if record.get('original_sha256'):
+            original = contained(game.target, backup).read_bytes()
+            if hashlib.sha256(original).hexdigest() != record['original_sha256']:
+                raise ValueError('HelixSR original DLL backup checksum mismatch')
+        ini = contained(game.target, 'OptiScaler.ini')
+        changes = {}
+        if ini.is_file():
+            text = ini.read_text(encoding='utf-8-sig')
+            value = module.hdr_ini_values(text, 'Libraries').get('ffxdx12srpath', '')
+            normalized = ntpath.normpath(value.strip().strip('"')).casefold()
+            if normalized in {ntpath.normpath(module.proton_path(game.target / direct)).casefold(), ntpath.normpath(direct).casefold()}:
+                changes['FfxDx12SRPath'] = module.proton_path(game.target / direct) if original is not None else 'auto'
+                atomic_bytes(ini, module.set_ini_values(text, 'Libraries', changes).encode(), ini.stat().st_mode & 0o777)
+        for relative in paths:
+            contained(game.target, relative).unlink(missing_ok=True)
+        owners['helixsr'] = set()
+        if original is not None:
+            atomic_bytes(contained(game.target, direct), original, record.get("original_mode", 0o644))
+            previous_owner = record.get('previous_owner')
+            if previous_owner in owners:
+                owners[previous_owner].add(direct)
+        recorded = read_json(game.target / module.COMPONENT_STATE, {})
+        module.COMPONENT_SELECTION = set(recorded.get('selected', [])) - {'helixsr'}
+        try:
+            os.chdir(game.target)
+            module.write_component_manifest(owners)
+        finally:
+            os.chdir(previous)
+        return {'removed': sorted(paths), 'restored': [direct] if original is not None else [], 'routing': changes}
     for relative in paths:
         parts = PurePosixPath(relative).parts
         if len(parts) < 3 or tuple(part.casefold() for part in parts[:2]) != ("optiscaler", "helixsr"):

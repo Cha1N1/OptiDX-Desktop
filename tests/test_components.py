@@ -25,7 +25,7 @@ class ComponentTests(unittest.TestCase):
         Path(self.module.TMP_DIR).mkdir()
         self.module.HELIXSR_DIR = self.root / "prepared"
         self.module.HELIXSR_DIR.mkdir()
-        for name in ("amd_fidelityfx_dx12.dll", "helixsr_weights.bin", "helixsr_kernels.pak"):
+        for name in (self.module.AMD_DLL_NAME,):
             (self.module.HELIXSR_DIR / name).write_bytes(b"prepared")
         self.output = contextlib.redirect_stderr(io.StringIO())
         self.output.__enter__()
@@ -42,7 +42,7 @@ class ComponentTests(unittest.TestCase):
             "optiscaler": ["dxgi.dll", "OptiScaler.ini"], "reshade": [m.RESHADE_DLL_NAME],
             "renodx": ["renodx-test.addon64"], "luma": ["TestGame.addon"],
             "amd_fsr": ["OptiScaler/" + m.AMD_DLL_NAME],
-            "helixsr": ["OptiScaler/HelixSR/" + m.HELIXSR_DLL_NAME],
+            "helixsr": ["OptiScaler/" + m.AMD_DLL_NAME, "OptiScaler/" + m.HELIXSR_STATE],
             "dlss_enabler": ["OptiScaler/dlss-enabler-headless.dll"],
         }
         def stage(name):
@@ -68,15 +68,108 @@ class ComponentTests(unittest.TestCase):
         m.optiscaler_urls = lambda: ["https://example.test/opti.zip"]
         m.configure_ue_hdr = lambda *args: None
         m.install_engine_fallback = lambda: None
-        m.repair_helixsr_forwarding = lambda **kwargs: False
         return calls, stage_files
+
+    def test_selected_custom_helix_dll_is_copied_and_tracked(self):
+        m = self.module
+        source = self.root / 'prepared/custom-fsr.dll'
+        source.write_bytes(b'HelixSR 1.7.0\x00custom build')
+        m.HELIXSR_SOURCE_DLL = source
+        Path('OptiScaler.ini').write_text('[Libraries]\n')
+        self.assertTrue(m.install_helixsr())
+        self.assertEqual(Path('OptiScaler/' + m.AMD_DLL_NAME).read_bytes(), source.read_bytes())
+        self.assertFalse(Path('OptiScaler/HelixSR').exists())
+        self.assertIn('OptiScaler/' + m.AMD_DLL_NAME, m.INSTALLED_FILES)
+
+    def test_standalone_helix_source_accepts_x64_and_rejects_wrong_machine(self):
+        from optidx_desktop.helixsr import local_source
+        from test_core import pe_fixture
+        source = self.root / 'prepared/custom.dll'
+        source.write_bytes(pe_fixture(bits=32))
+        with self.assertRaisesRegex(ValueError, 'x64'):
+            local_source(str(source))
+        source.write_bytes(pe_fixture())
+        self.assertEqual(local_source(str(source)), source.resolve())
+        self.assertFalse((source.parent / 'helixsr_weights.bin').exists())
+        self.assertFalse((source.parent / 'helixsr_kernels.pak').exists())
+
+    def test_direct_helix_migrates_legacy_and_restores_replaced_dll(self):
+        from optidx_desktop.helixsr import remove
+        from optidx_desktop.library import manual_game
+        from optidx_desktop.storage import Repository
+        from test_core import pe_fixture
+        m = self.module
+        exe = self.root / 'Game.exe'
+        exe.write_bytes(pe_fixture())
+        Path('OptiScaler.ini').write_text('[Libraries]\nFfxDx12Path=OptiScaler/HelixSR/helixsr.dll\nFfxDx12SRPath=OptiScaler/HelixSR/helixsr_upscaler.dll\n')
+        Path('dxgi.dll').write_bytes(b'loader')
+        legacy = Path('OptiScaler/HelixSR/helixsr.dll')
+        legacy.parent.mkdir(parents=True)
+        legacy.write_bytes(b'legacy')
+        user = legacy.parent / 'user.txt'
+        user.write_text('keep')
+        target = Path('OptiScaler') / m.AMD_DLL_NAME
+        target.write_bytes(b'previous AMD')
+        owners = {name: set() for name in m.COMPONENT_NAMES}
+        owners['amd_fsr'] = {target.as_posix()}
+        owners['helixsr'] = {legacy.as_posix()}
+        m.COMPONENT_SELECTION = {'helixsr'}
+        m.write_component_manifest(owners)
+        source = self.root / 'prepared/custom.dll'
+        source.write_bytes(pe_fixture() + b'first build')
+        m.HELIXSR_SOURCE_DLL = source
+        m.install_selected_components()
+        self.assertEqual(target.read_bytes(), source.read_bytes())
+        self.assertFalse(legacy.exists())
+        self.assertEqual(user.read_text(), 'keep')
+        self.assertEqual(m.owned_components()['helixsr'], {
+            target.as_posix(), 'OptiScaler/.optidx-helixsr.json', 'OptiScaler/.optidx-helixsr-original.bin'})
+        self.assertFalse(m.component_present('amd_fsr'))
+        from optidx_desktop.inspection import inspect_game
+        detected = inspect_game(manual_game(exe, 'Example'))['components']
+        self.assertTrue(detected['HelixSR'])
+        self.assertFalse(detected['AMD FSR'])
+        self.assertNotIn('OptiScaler/HelixSR/', Path('OptiScaler.ini').read_text())
+        source.write_bytes(pe_fixture() + b'second build')
+        m.install_selected_components()
+        game = manual_game(exe, 'Example')
+        with patch('optidx_desktop.helixsr.load_backend', return_value=m):
+            remove(game, Repository(self.root / 'data'), {})
+        self.assertEqual(target.read_bytes(), b'previous AMD')
+        self.assertIn(target.as_posix(), m.owned_components()['amd_fsr'])
+        self.assertFalse((target.parent / m.HELIXSR_STATE).exists())
+
+    def test_direct_helix_rejects_damaged_original_backup(self):
+        m = self.module
+        Path('OptiScaler.ini').write_text('[Libraries]\n')
+        Path('OptiScaler').mkdir()
+        target = Path('OptiScaler') / m.AMD_DLL_NAME
+        target.write_bytes(b'previous AMD')
+        m.install_helixsr()
+        before = target.read_bytes()
+        Path('OptiScaler/.optidx-helixsr-original.bin').write_bytes(b'damaged')
+        with self.assertRaisesRegex(ValueError, 'checksum'):
+            m.install_helixsr()
+        self.assertEqual(target.read_bytes(), before)
+        from optidx_desktop.helixsr import remove
+        from optidx_desktop.library import manual_game
+        from optidx_desktop.storage import Repository
+        exe = self.root / 'Game.exe'
+        exe.write_bytes(b'fixture')
+        owners = {name: set() for name in m.COMPONENT_NAMES}
+        owners['helixsr'] = {target.as_posix(), 'OptiScaler/.optidx-helixsr.json', 'OptiScaler/.optidx-helixsr-original.bin'}
+        m.COMPONENT_SELECTION = {'helixsr'}
+        m.write_component_manifest(owners)
+        with patch('optidx_desktop.helixsr.load_backend', return_value=m), self.assertRaisesRegex(ValueError, 'checksum'):
+            remove(manual_game(exe, 'Example'), Repository(self.root / 'data'), {})
+        self.assertEqual(target.read_bytes(), before)
 
     def test_all_component_combinations_respect_selection_and_dependencies(self):
         m = self.module
         calls, files = self.fake_stages()
         for bits in itertools.product([False, True], repeat=len(m.COMPONENT_NAMES)):
             selected = {name for name, enabled in zip(m.COMPONENT_NAMES, bits) if enabled}
-            valid = bool(selected) and (not selected.intersection({"renodx", "luma"}) or "reshade" in selected) and (
+            valid = bool(selected) and not {"helixsr", "amd_fsr"} <= selected and (not selected.intersection({"renodx", "luma"}) or "reshade" in selected) and (
                 "helixsr" not in selected or "optiscaler" in selected)
             with self.subTest(selected=selected), tempfile.TemporaryDirectory(dir=self.root) as folder:
                 os.chdir(folder)
@@ -98,7 +191,7 @@ class ComponentTests(unittest.TestCase):
     def test_unchecked_components_are_preserved_until_explicit_pruning(self):
         m = self.module
         calls, files = self.fake_stages()
-        m.COMPONENT_SELECTION = set(m.COMPONENT_NAMES)
+        m.COMPONENT_SELECTION = set(m.COMPONENT_NAMES) - {"helixsr"}
         m.install_selected_components()
         foreign = Path("UserTool.addon64")
         foreign.write_bytes(b"custom")

@@ -89,9 +89,14 @@ class WorkflowMixin:
             action.triggered.connect(callback)
             self.addAction(action)
         state = self.workspace
+        # Restore all controls before inspecting games or loading a profile.
+        controls = (self.search, self.filter, self.sort)
+        blocked = [control.blockSignals(True) for control in controls]
         self.search.setText(state.get('search', ''))
         self.filter.setCurrentText(state.get('filter', 'All games'))
         self.sort.setCurrentText(state.get('sort', 'Display name'))
+        for control, previous in zip(controls, blocked):
+            control.blockSignals(previous)
         if state.get('geometry'):
             self.restoreGeometry(QByteArray.fromHex(state['geometry'].encode()))
         if state.get('splitter'):
@@ -116,7 +121,7 @@ class WorkflowMixin:
                 **{'fg:' + k: v for k, v in self.fg.items()},
                 **{'feature:' + k: v for k, v in self.features.fields.items()},
                 **{'drs:' + k: v for k, v in self.features.drs.items()},
-                'prune': self.prune_components, 'hdr': self.hdr, 'include': self.include_updates,
+                'helixsr_dll': self.helixsr_dll, 'prune': self.prune_components, 'hdr': self.hdr, 'include': self.include_updates,
                 'prefix': self.prefix, 'config': self.config_dir, 'environment': self.features.environment,
                 'dll_kind': self.features.dll_kind, 'dll_version': self.features.dll_version,
                 'dll_folder': self.features.dll_folder}
@@ -208,6 +213,10 @@ class WorkflowMixin:
             installed_label = {'reshade': 'ReShade', 'optiscaler': 'OptiScaler'}[dependency]
             if component in chosen and dependency not in chosen and not found.get(installed_label):
                 problems.append(f'{self.components[component].text()} requires selected or installed {label}')
+        if 'helixsr' in chosen and hasattr(self, 'helixsr_dll'):
+            path = Path(self.helixsr_dll.text()).expanduser()
+            if not self.helixsr_dll.text().strip() or not path.is_file():
+                problems.append('Choose the locally built HelixSR FSR DLL')
         return problems
 
     def refresh_workflow_status(self):
@@ -236,6 +245,11 @@ class WorkflowMixin:
             statuses = ['Selected' if box.isChecked() else 'Unselected', 'Detected' if info.get('components', {}).get('AMD FSR' if key == 'amd_fsr' else COMPONENT_LABELS[key]) else 'Not detected']
             if key in available: statuses.append('Update available')
             if key in {'renodx','luma','helixsr'} and any(box.text() in p for p in problems): statuses.append('Dependency missing')
+            if key in {'helixsr', 'amd_fsr'}:
+                opposite = 'amd_fsr' if key == 'helixsr' else 'helixsr'
+                if self.components[opposite].isChecked():
+                    label = 'HelixSR' if opposite == 'helixsr' else 'Cyboman FSR'
+                    statuses = [f'Unavailable · untick {label} to switch']
             self.component_status_labels[key].setText(' · '.join(statuses))
         game = self.selected
         if game:

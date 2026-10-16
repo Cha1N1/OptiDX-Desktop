@@ -74,11 +74,65 @@ class WorkflowTests(unittest.TestCase):
         self.window.components['helixsr'].setChecked(True)
         self.assertFalse(self.window.install_button.isEnabled())
         self.assertIn('OptiScaler', self.window.action_hint.text())
+        dll = self.root / 'helixsr.dll'
+        dll.write_bytes(b'fixture')
+        self.window.helixsr_dll.setText(str(dll))
         self.window.components['optiscaler'].setChecked(True)
         self.assertTrue(self.window.install_button.isEnabled())
         self.window.stash_draft()
         self.window.save_profile()
         self.assertNotIn(self.game.id, read_json(self.repo.directory / 'drafts.json', {}))
+
+    def test_helix_picker_excludes_cyboman_and_path_survives_switch(self):
+        self.window.components['amd_fsr'].setChecked(False)
+        self.window.components['helixsr'].setChecked(True)
+        self.assertFalse(self.window.components['amd_fsr'].isEnabled())
+        self.assertIn('untick HelixSR', self.window.component_status_labels['amd_fsr'].text())
+        self.assertLessEqual(self.window.helixsr_dll.maximumWidth(), 200)
+        self.assertFalse(self.window.helixsr_picker.isHidden())
+        self.window.helixsr_dll.setText('/build/HelixSR/custom.dll')
+        self.select(self.other)
+        self.select(self.game)
+        self.assertTrue(self.window.components['helixsr'].isChecked())
+        self.assertEqual(self.window.helixsr_dll.text(), '/build/HelixSR/custom.dll')
+        self.window.components['helixsr'].setChecked(False)
+        self.window.components['amd_fsr'].setChecked(True)
+        self.assertFalse(self.window.components['helixsr'].isEnabled())
+        self.assertTrue(self.window.helixsr_picker.isHidden())
+
+    def test_startup_restores_filtered_library_and_draft(self):
+        self.repo.save_preferences(self.game, {'favourite': True})
+        atomic_json(self.repo.directory / 'workspace.json', {
+            'search': 'Zebra', 'filter': 'Favourites', 'sort': 'Updates first',
+            'selected': self.game.id, 'page': 'Recovery'})
+        atomic_json(self.repo.directory / 'drafts.json', {
+            self.game.id: {'prefix': '/saved/draft/prefix'}})
+        another = MainWindow(self.repo, auto_scan=False)
+        try:
+            self.assertEqual(another.list.count(), 1)
+            self.assertEqual(another.selected.id, self.game.id)
+            self.assertEqual(another.prefix.text(), '/saved/draft/prefix')
+            self.assertEqual(another.tabs.tabText(another.tabs.currentIndex()), 'Recovery')
+            another.search.clear()
+            another.filter.setCurrentText('All games')
+            self.assertEqual(another.list.count(), 2)
+        finally:
+            another.close()
+            another.deleteLater()
+
+    def test_helix_picker_does_not_stretch_cyboman_or_delay_dlss(self):
+        self.window.resize(1800, 1000)
+        self.window.show()
+        self.window.components['amd_fsr'].setChecked(False)
+        self.app.processEvents()
+        cyboman = self.window.components['amd_fsr'].parentWidget()
+        dlss = self.window.components['dlss_enabler'].parentWidget()
+        before = cyboman.height()
+        self.window.components['helixsr'].setChecked(True)
+        self.app.processEvents()
+        self.assertLessEqual(cyboman.height(), before + 25)
+        self.assertLessEqual(cyboman.parentWidget().width(), 720)
+        self.assertLess(dlss.y(), self.window.components['helixsr'].parentWidget().geometry().bottom())
 
     def test_individual_queue_removal_does_not_change_active_job(self):
         self.window.start_next = lambda: None

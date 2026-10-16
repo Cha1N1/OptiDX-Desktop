@@ -47,6 +47,8 @@ QToolTip { background: #232c3a; color: #dbe3ed; border: 1px solid #344155; paddi
 QPushButton:pressed, QToolButton:pressed { background: #1c2835; border-color: #75b8b2; }
 QPushButton#primary:pressed { background: #4bb6a7; }
 QPushButton:focus, QToolButton:focus { border: 1px solid #62a99f; }
+QCheckBox:disabled { color: #6f7e91; }
+QCheckBox::indicator:disabled { background: #1c222c; border-color: #293241; }
 QListWidget { outline: 0; }
 QListWidget::item:focus { border: 1px solid #436a6b; }
 QLineEdit:disabled, QComboBox:disabled { color: #6f7e91; border-color: #293241; }
@@ -59,7 +61,17 @@ QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 4px; }
 
 # Canonical colors are the existing Original theme. Substitute each literal once
 # so shared geometry and interaction states remain identical between themes.
-DARK = {}
+DARK = {
+    '#11151c': '#090c12', '#151b25': '#0d111a', '#191f29': '#121823',
+    '#151b24': '#0d111a', '#202938': '#151d2a',
+    '#75ded2': '#ffffff', '#62d6c4': '#ffffff', '#102522': '#090c12',
+    '#8de6d9': '#ffffff', '#263e41': '#273246', '#315052': '#273246',
+    '#c8fff5': '#ffffff', '#75b8b2': '#d4deed', '#62a99f': '#d4deed',
+    '#4bb6a7': '#c3cede', '#436a6b': '#d4deed', '#253e3c': '#1c2534',
+    '#698782': '#8793a6',
+    '#232c3a': '#191f2b', '#232e3c': '#202838', '#303d50': '#293448',
+    '#1c222c': '#141a25', '#1b2430': '#141c28', '#1c2835': '#1c2635',
+}
 LIGHT = {
     '#11151c': '#f2f4f6', '#dbe3ed': '#202a35', '#f0f6fc': '#15212c',
     '#94a3b8': '#596879', '#191f29': '#ffffff', '#293241': '#d1d9e0',

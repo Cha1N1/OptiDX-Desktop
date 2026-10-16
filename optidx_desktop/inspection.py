@@ -132,9 +132,9 @@ def inspect_game(game):
         "ReShade": has({"d3d12-ReShade64.dll", "ReShade64.dll", "ReShade32.dll"}),
         "RenoDX": any(n.lower().startswith("renodx") and ".addon" in n.lower() for n in files),
         "Luma": any(("luma" in n.lower() and ".addon" in n.lower()) or n.lower().endswith(".addon") for n in files),
-        "HelixSR": any((root / "OptiScaler/HelixSR" / name).is_file()
+        "HelixSR": ((root / "OptiScaler/.optidx-helixsr.json").is_file() and (root / "OptiScaler/amd_fidelityfx_upscaler_dx12.dll").is_file()) or any((root / "OptiScaler/HelixSR" / name).is_file()
                        for name in ["helixsr.dll", "amd_fidelityfx_dx12.dll"]),
-        "AMD FSR": (root / "OptiScaler/amd_fidelityfx_upscaler_dx12.dll").is_file(),
+        "AMD FSR": (root / "OptiScaler/amd_fidelityfx_upscaler_dx12.dll").is_file() and not (root / "OptiScaler/.optidx-helixsr.json").is_file(),
         "DLSS Enabler": (root / "OptiScaler/dlss-enabler-headless.dll").is_file(),
     }
     hdr = read_json(root / ".optidx-ue-hdr.json", {})

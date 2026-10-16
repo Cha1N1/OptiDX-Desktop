@@ -1,7 +1,27 @@
-# Unreleased — desktop quality-of-life improvements
+# OptiDX Desktop 0.3.5
 
-- Appearance now offers Dark, Light and System. Dark is the original navy/teal
-  style; saved Original choices migrate to Dark. System uses the actual desktop
+- HelixSR now directly replaces `OptiScaler/amd_fidelityfx_upscaler_dx12.dll`.
+  Removed the old forwarding/subfolder deployment. Tracked legacy files migrate
+  on installation; user files are retained, and targeted removal restores a
+  verified copy of the replaced DLL.
+
+- Keep the component card compact on wide windows; opening the HelixSR picker
+  no longer stretches the neighbouring component column.
+
+- HelixSR now needs only its DLL; external weights/kernels are no longer
+  required or copied. Shortened its path field and added dimmed controls with
+  visible explanations when the alternative FSR choice is unavailable.
+
+- Added a per-game standalone HelixSR DLL picker with x64 validation; HelixSR and
+  Cyboman lossy FSR are mutually exclusive. Update and uninstall actions stay
+  visible on Installation. Dark now uses white accents on near-black blue, with a
+  matching header and application icon.
+
+- Faster AppImage startup using gzip compression. Restore saved library filters
+  before the initial library load, avoiding duplicate startup inspection and
+  profile loading. Existing saved filters, pages and drafts are retained.
+
+- Appearance now offers Dark, Light and System. Dark uses white accents on near-black blue; saved Original choices migrate to Dark. System uses the actual desktop
   Qt palette (including custom KDE colors) rather than selecting an app preset.
   Native palette updates and KDE color-file replacement are followed live;
   application presets no longer overwrite the native application palette.
@@ -38,12 +58,11 @@
   newer unrecorded files.
 - Remember workspace layout and navigation, add library sorting and Ctrl+F/S/R.
 
-**Validation:** 158 automated tests pass, including draft persistence, queue controls,
-restore verification and simulated restore-failure recovery. Fresh offscreen renders
-checked at 1220×880 and 930×740. Tests use temporary game folders; real game installs
-and gameplay were not changed or tested. Rebuilt the local 0.3.4 AppImage without a version bump. All 158 tests also
-pass with the bundled interpreter; checksum, FUSE-free startup and backend help
-were verified.
+**Validation:** 165 automated tests cover component selection, standalone HelixSR
+DLL deployment, drafts, queues, ownership and recovery in temporary game folders.
+Source and bundled-Python tests, fresh UI previews, checksum, FUSE-free startup
+and backend help are checked for the local build. These checks do not establish
+real-game or cross-distribution compatibility.
 
 ---
 
