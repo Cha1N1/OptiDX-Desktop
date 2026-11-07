@@ -1,5 +1,5 @@
 """Read launcher metadata without launching games or modifying launcher settings."""
-import json
+
 import os
 from pathlib import Path
 import re
@@ -8,12 +8,16 @@ from urllib.parse import urlencode
 from .models import Game, game_id
 from .storage import read_json
 
-SKIP_EXE = re.compile(r"crash|unins|redist|setup|easyanticheat|beservice|prereq|cef|installer", re.I)
+SKIP_EXE = re.compile(
+    r"crash|unins|redist|setup|easyanticheat|beservice|prereq|cef|installer", re.I
+)
 
 
 def vdf_parse(text):
     tokens = re.findall(r'"((?:\\.|[^"\\])*)"|([{}])', re.sub(r"(?m)^\s*//.*$", "", text))
-    values = [s.replace('\\\\', '\\').replace('\\"', '"') if not brace else brace for s, brace in tokens]
+    values = [
+        s.replace("\\\\", "\\").replace('\\"', '"') if not brace else brace for s, brace in tokens
+    ]
     index = 0
 
     def block():
@@ -69,8 +73,12 @@ def find_executable(root, limit=600):
 
 
 def steam_games(home):
-    roots = [home / ".local/share/Steam", home / ".steam/steam", home / ".steam/root",
-             home / ".var/app/com.valvesoftware.Steam/.local/share/Steam"]
+    roots = [
+        home / ".local/share/Steam",
+        home / ".steam/steam",
+        home / ".steam/root",
+        home / ".var/app/com.valvesoftware.Steam/.local/share/Steam",
+    ]
     libraries = set()
     for root in roots:
         if not root.is_dir():
@@ -88,16 +96,29 @@ def steam_games(home):
         for manifest in sorted((library / "steamapps").glob("appmanifest_*.acf")):
             data = vdf_parse(manifest.read_text(errors="replace")).get("AppState", {})
             app_id, directory = data.get("appid"), data.get("installdir")
-            if not app_id or not directory or Path(directory).is_absolute() or ".." in Path(directory).parts:
+            if (
+                not app_id
+                or not directory
+                or Path(directory).is_absolute()
+                or ".." in Path(directory).parts
+            ):
                 continue
             root = library / "steamapps/common" / directory
             if not root.is_dir():
                 continue
             if re.search(r"^(Proton|Steam Linux Runtime|Steamworks Common)", data.get("name", "")):
                 continue
-            yield Game(game_id("Steam", root.resolve()), data.get("name", directory), "Steam", str(root),
-                       find_executable(root), str(library / "steamapps/compatdata" / app_id / "pfx"),
-                       app_id, "steam", "steam://rungameid/" + app_id)
+            yield Game(
+                game_id("Steam", app_id),
+                data.get("name", directory),
+                "Steam",
+                str(root),
+                find_executable(root),
+                str(library / "steamapps/compatdata" / app_id / "pfx"),
+                app_id,
+                "steam",
+                "steam://rungameid/" + app_id,
+            )
 
 
 def heroic_games(home):
@@ -108,15 +129,24 @@ def heroic_games(home):
             sideload = list(sideload.values())
         legendary = read_json(config / "legendaryConfig/legendary/installed.json", {})
         gog = read_json(config / "store_cache/gog_install_info.json", {})
-        for runner, entries in [("sideload", sideload), ("legendary", list(legendary.values())),
-                                ("gog", list(gog.values()) if isinstance(gog, dict) else gog)]:
+        for runner, entries in [
+            ("sideload", sideload),
+            ("legendary", list(legendary.values())),
+            ("gog", list(gog.values()) if isinstance(gog, dict) else gog),
+        ]:
             for entry in entries:
                 if not isinstance(entry, dict) or entry.get("is_dlc"):
                     continue
                 install = entry.get("install", {})
-                key = str(entry.get("app_name") or entry.get("appName") or entry.get("gameId") or "")
+                key = str(
+                    entry.get("app_name") or entry.get("appName") or entry.get("gameId") or ""
+                )
                 executable = str(install.get("executable") or entry.get("executable") or "")
-                root = entry.get("install_path") or entry.get("installPath") or entry.get("folder_name")
+                root = (
+                    entry.get("install_path")
+                    or entry.get("installPath")
+                    or entry.get("folder_name")
+                )
                 if not root and executable:
                     root = str(Path(executable).parent)
                 if not root or not key:
@@ -129,9 +159,21 @@ def heroic_games(home):
                 executable = selected or executable
                 profile = read_json(config / "GamesConfig" / (key + ".json"), {}).get(key, {})
                 uri = "heroic://launch?" + urlencode({"appName": key, "runner": runner})
-                yield Game(game_id("Heroic", root.resolve()), entry.get("title") or root.name, "Heroic", str(root),
-                           executable, profile.get("winePrefix", ""), key, runner, uri,
-                           "flatpak" if config == roots[1] else "native")
+                yield Game(
+                    game_id(
+                        "Heroic",
+                        ("flatpak" if config == roots[1] else "native") + ":" + runner + ":" + key,
+                    ),
+                    entry.get("title") or root.name,
+                    "Heroic",
+                    str(root),
+                    executable,
+                    profile.get("winePrefix", ""),
+                    key,
+                    runner,
+                    uri,
+                    "flatpak" if config == roots[1] else "native",
+                )
 
 
 def scan_library(home=None, cached=()):
@@ -141,7 +183,13 @@ def scan_library(home=None, cached=()):
     warnings = []
     import sqlite3
     from .extra_library import lutris_games, bottles_games
-    for name, scanner in [("Steam", steam_games), ("Heroic", heroic_games), ("Lutris", lutris_games), ("Bottles", bottles_games)]:
+
+    for name, scanner in [
+        ("Steam", steam_games),
+        ("Heroic", heroic_games),
+        ("Lutris", lutris_games),
+        ("Bottles", bottles_games),
+    ]:
         try:
             for game in scanner(home):
                 games[game.id] = game

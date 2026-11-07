@@ -1,4 +1,5 @@
 """Read desktop Qt colors without letting app-owned palettes feed back into them."""
+
 import os
 from pathlib import Path
 
@@ -8,8 +9,9 @@ from PySide6.QtWidgets import QApplication
 
 
 def blend(first, second, amount):
-    return QColor.fromRgbF(*[a * (1 - amount) + b * amount
-                            for a,b in zip(first.getRgbF()[:3], second.getRgbF()[:3])])
+    return QColor.fromRgbF(
+        *[a * (1 - amount) + b * amount for a, b in zip(first.getRgbF()[:3], second.getRgbF()[:3])]
+    )
 
 
 def kde_palette(base, path):
@@ -17,35 +19,60 @@ def kde_palette(base, path):
     settings = QSettings(str(path), QSettings.Format.IniFormat)
     palette = QPalette(base)
     roles = {
-        'Colors:Window': {'BackgroundNormal': QPalette.ColorRole.Window, 'ForegroundNormal': QPalette.ColorRole.WindowText},
-        'Colors:View': {'BackgroundNormal': QPalette.ColorRole.Base, 'BackgroundAlternate': QPalette.ColorRole.AlternateBase,
-                        'ForegroundNormal': QPalette.ColorRole.Text, 'ForegroundLink': QPalette.ColorRole.Link,
-                        'ForegroundVisited': QPalette.ColorRole.LinkVisited, 'ForegroundInactive': QPalette.ColorRole.PlaceholderText},
-        'Colors:Button': {'BackgroundNormal': QPalette.ColorRole.Button, 'ForegroundNormal': QPalette.ColorRole.ButtonText},
-        'Colors:Selection': {'BackgroundNormal': QPalette.ColorRole.Highlight, 'ForegroundNormal': QPalette.ColorRole.HighlightedText},
-        'Colors:Tooltip': {'BackgroundNormal': QPalette.ColorRole.ToolTipBase, 'ForegroundNormal': QPalette.ColorRole.ToolTipText},
+        "Colors:Window": {
+            "BackgroundNormal": QPalette.ColorRole.Window,
+            "ForegroundNormal": QPalette.ColorRole.WindowText,
+        },
+        "Colors:View": {
+            "BackgroundNormal": QPalette.ColorRole.Base,
+            "BackgroundAlternate": QPalette.ColorRole.AlternateBase,
+            "ForegroundNormal": QPalette.ColorRole.Text,
+            "ForegroundLink": QPalette.ColorRole.Link,
+            "ForegroundVisited": QPalette.ColorRole.LinkVisited,
+            "ForegroundInactive": QPalette.ColorRole.PlaceholderText,
+        },
+        "Colors:Button": {
+            "BackgroundNormal": QPalette.ColorRole.Button,
+            "ForegroundNormal": QPalette.ColorRole.ButtonText,
+        },
+        "Colors:Selection": {
+            "BackgroundNormal": QPalette.ColorRole.Highlight,
+            "ForegroundNormal": QPalette.ColorRole.HighlightedText,
+        },
+        "Colors:Tooltip": {
+            "BackgroundNormal": QPalette.ColorRole.ToolTipBase,
+            "ForegroundNormal": QPalette.ColorRole.ToolTipText,
+        },
     }
+
     def read(key):
         value = settings.value(key)
         if isinstance(value, (list, tuple)):
-            try: return QColor(*[int(part) for part in value])
-            except (ValueError, TypeError): return QColor()
+            try:
+                return QColor(*[int(part) for part in value])
+            except (ValueError, TypeError):
+                return QColor()
         return QColor(str(value)) if value is not None else QColor()
+
     found = False
     for group, entries in roles.items():
         for key, role in entries.items():
-            color = read(group + '/' + key)
+            color = read(group + "/" + key)
             if color.isValid():
                 palette.setColor(role, color)
                 found = True
-        inactive = read(group + '/ForegroundInactive')
-        foreground = entries.get('ForegroundNormal')
+        inactive = read(group + "/ForegroundInactive")
+        foreground = entries.get("ForegroundNormal")
         if foreground is not None and inactive.isValid():
             palette.setColor(QPalette.ColorGroup.Disabled, foreground, inactive)
     if found:
         window, text = palette.window().color(), palette.windowText().color()
-        for role, amount in [(QPalette.ColorRole.Mid, .25), (QPalette.ColorRole.Midlight, .16),
-                             (QPalette.ColorRole.Light, .12), (QPalette.ColorRole.Dark, .32)]:
+        for role, amount in [
+            (QPalette.ColorRole.Mid, 0.25),
+            (QPalette.ColorRole.Midlight, 0.16),
+            (QPalette.ColorRole.Light, 0.12),
+            (QPalette.ColorRole.Dark, 0.32),
+        ]:
             palette.setColor(role, blend(window, text, amount))
         palette.setColor(QPalette.ColorRole.Shadow, window.darker(130))
         palette.setColor(QPalette.ColorRole.Accent, palette.highlight().color())
@@ -65,9 +92,12 @@ class SystemPalette(QObject):
         self.timer.setInterval(80)
         self.timer.timeout.connect(self.refresh)
         self.kde_path = None
-        if 'KDE' in os.environ.get('XDG_CURRENT_DESKTOP', '').upper().split(':'):
-            self.kde_path = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'kdeglobals'
-            if self.kde_path.parent.is_dir(): self.watcher.addPath(str(self.kde_path.parent))
+        if "KDE" in os.environ.get("XDG_CURRENT_DESKTOP", "").upper().split(":"):
+            self.kde_path = (
+                Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "kdeglobals"
+            )
+            if self.kde_path.parent.is_dir():
+                self.watcher.addPath(str(self.kde_path.parent))
             self.watch_file()
         self.watcher.fileChanged.connect(self.schedule)
         self.watcher.directoryChanged.connect(self.schedule)
@@ -76,7 +106,11 @@ class SystemPalette(QObject):
         self.current = self.palette()
 
     def watch_file(self):
-        if self.kde_path and self.kde_path.is_file() and str(self.kde_path) not in self.watcher.files():
+        if (
+            self.kde_path
+            and self.kde_path.is_file()
+            and str(self.kde_path) not in self.watcher.files()
+        ):
             self.watcher.addPath(str(self.kde_path))
 
     def schedule(self, *args):
@@ -101,6 +135,6 @@ class SystemPalette(QObject):
 
 def system_palette_source():
     app = QApplication.instance()
-    if not hasattr(app, '_optidx_system_palette'):
+    if not hasattr(app, "_optidx_system_palette"):
         app._optidx_system_palette = SystemPalette(app)
     return app._optidx_system_palette

@@ -1,4 +1,5 @@
 import os
+
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 from pathlib import Path
@@ -35,6 +36,77 @@ class UiTests(unittest.TestCase):
         self.window.deleteLater()
         self.app.processEvents()
         self.temporary.cleanup()
+
+    def test_obsolete_lossy2_choice_is_blocked_for_current_downloads(self):
+        from PySide6.QtWidgets import QPushButton
+
+        fields = self.window.features.fields
+        legacy = fields["upscaler_cyboman_lossy2"]
+        install = self.window.findChild(QPushButton, "installCustomUpscalers")
+        self.assertFalse(legacy.isEnabled())
+        # Previously saved profiles/drafts keep the choice visible and removable.
+        legacy.setChecked(True)
+        self.assertTrue(legacy.isEnabled())
+        self.assertFalse(install.isEnabled())
+        legacy.setChecked(False)
+        self.assertFalse(legacy.isEnabled())
+        self.assertTrue(install.isEnabled())
+        fields["upscaler_cyboman_archive"].setText("/tmp/older-cyboman.zip")
+        self.assertTrue(legacy.isEnabled())
+        legacy.setChecked(True)
+        self.assertTrue(install.isEnabled())
+        fields["upscaler_cyboman_archive"].clear()
+        self.assertFalse(install.isEnabled())
+
+    def test_upscaler_dropdown_stays_open_for_multiple_choices(self):
+        from PySide6.QtCore import Qt, QPoint
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QPushButton
+
+        picker = self.window.findChild(QPushButton, "customUpscalerPicker")
+        menu = picker.menu()
+        menu.popup(QPoint(100, 100))
+        self.app.processEvents()
+        for key in ("upscaler_cyboman_exact", "upscaler_helix_fsr4"):
+            check = self.window.features.fields[key]
+            QTest.mouseClick(check, Qt.MouseButton.LeftButton, pos=QPoint(20, check.height() // 2))
+            self.assertTrue(check.isChecked())
+            self.assertTrue(menu.isVisible())
+        menu.close()
+
+    def test_custom_upscaler_picker_round_trip_and_drafts(self):
+        fields = self.window.features.fields
+        self.assertFalse(
+            any(
+                fields["upscaler_" + key].isChecked()
+                for key in (
+                    "cyboman_exact",
+                    "cyboman_lossy",
+                    "cyboman_lossy2",
+                    "helix_fsr4",
+                    "helix_dlss",
+                )
+            )
+        )
+        fields["upscaler_cyboman_lossy2"].setChecked(True)
+        fields["upscaler_helix_dlss"].setChecked(True)
+        fields["upscaler_helix_dlss_dll"].setText("/tmp/prepared.dll")
+        draft = self.window.capture_form()
+        self.assertTrue(draft["feature:upscaler_helix_dlss"])
+        self.window.save_profile()
+        self.window.load_profile()
+        self.assertTrue(fields["upscaler_cyboman_lossy2"].isChecked())
+        self.assertTrue(fields["upscaler_helix_dlss"].isChecked())
+        from PySide6.QtWidgets import QPushButton
+
+        self.assertIn(
+            "2 selected", self.window.findChild(QPushButton, "customUpscalerPicker").text()
+        )
+        self.assertEqual(fields["upscaler_helix_dlss_dll"].text(), "/tmp/prepared.dll")
+        fields["upscaler_helix_dlss"].setChecked(False)
+        self.window.apply_draft(draft)
+        self.assertTrue(fields["upscaler_helix_dlss"].isChecked())
+        self.assertEqual(len(list(self.game.target.iterdir())), 1)
 
     def test_select_profile_and_filter_without_mutating_game(self):
         self.assertEqual(self.window.selected.title, "Example Game")
@@ -74,12 +146,18 @@ class UiTests(unittest.TestCase):
 
     def test_install_action_is_scoped_to_its_page_and_reports_selection(self):
         from PySide6.QtCore import Qt, QPoint, QRect
+
         self.window.show()
         self.window.resize(930, 740)
         self.app.processEvents()
-        self.assertTrue(self.window.tabs.rect().contains(QRect(
-            self.window.install_button.mapTo(self.window.tabs, QPoint(0, 0)),
-            self.window.install_button.size())))
+        self.assertTrue(
+            self.window.tabs.rect().contains(
+                QRect(
+                    self.window.install_button.mapTo(self.window.tabs, QPoint(0, 0)),
+                    self.window.install_button.size(),
+                )
+            )
+        )
         for box in self.window.components.values():
             box.setChecked(False)
         self.assertFalse(self.window.install_button.isEnabled())
@@ -94,7 +172,14 @@ class UiTests(unittest.TestCase):
         self.window.features.shader_list.item(0).setCheckState(Qt.CheckState.Checked)
         self.window.start_next = lambda: None
         self.window.install_button.click()
-        game, action, profile, options, callback = self.window.queue.pop()
+        job = self.window.queue.pop()
+        _game, action, profile, options, _callback = (
+            job.game,
+            job.action,
+            job.preferences,
+            job.options,
+            job.callback,
+        )
         self.assertEqual(action, "install")
         self.assertEqual({k for k, value in profile["components"].items() if value}, {"reshade"})
         self.assertEqual(options, {})
@@ -102,20 +187,25 @@ class UiTests(unittest.TestCase):
         self.app.processEvents()
         self.assertFalse(self.window.install_button.isVisible())
         self.window.features.install_shaders()
-        self.assertEqual(self.window.queue[0][1], "deploy_shader")
+        self.assertEqual(self.window.queue[0].action, "deploy_shaders")
         self.window.queue.clear()
         self.assertEqual(len(list(self.game.target.iterdir())), 1)
 
     def test_library_and_details_do_not_touch_after_resize_or_splitter_restore(self):
         from PySide6.QtCore import QPoint
+
         self.window.show()
         for width, height in [(1220, 880), (930, 740), (2000, 1100)]:
             self.window.resize(width, height)
             self.window.splitter.setSizes([width // 3, width * 2 // 3])
             self.app.processEvents()
-            search_right = self.window.search.mapTo(self.window, QPoint(self.window.search.width(), 0)).x()
+            search_right = self.window.search.mapTo(
+                self.window, QPoint(self.window.search.width(), 0)
+            ).x()
             title_left = self.window.game_title.mapTo(self.window, QPoint(0, 0)).x()
-            nav_right = self.window.navigation.mapTo(self.window, QPoint(self.window.navigation.width(), 0)).x()
+            nav_right = self.window.navigation.mapTo(
+                self.window, QPoint(self.window.navigation.width(), 0)
+            ).x()
             panel_left = self.window.tabs.mapTo(self.window, QPoint(0, 0)).x()
             self.assertGreaterEqual(title_left - search_right, 16)
             self.assertGreaterEqual(panel_left - nav_right, 8)
@@ -133,138 +223,197 @@ class UiTests(unittest.TestCase):
         self.assertFalse(preset.isVisible())  # Advanced INI presets start closed.
         self.assertIn("configuration", preset.itemText(0))
         self.assertFalse(self.window.overview.isAncestorOf(self.window.features.app_background))
-        self.assertTrue(self.window.features.app_dialog.isAncestorOf(self.window.features.app_background))
+        self.assertTrue(
+            self.window.features.app_dialog.isAncestorOf(self.window.features.app_background)
+        )
         self.assertEqual(len(list(self.game.target.iterdir())), 1)
 
     def test_library_actions_do_not_save_or_validate_game_overrides(self):
         self.window.features.environment.setPlainText("unfinished JSON")
         self.window.start_next = lambda: None
         self.window.features.job("refresh_catalogs")
-        game, action, profile, options, callback = self.window.queue.pop()
+        job = self.window.queue.pop()
+        game, action, profile, _options, callback = (
+            job.game,
+            job.action,
+            job.preferences,
+            job.options,
+            job.callback,
+        )
         self.assertEqual(game.id, "global")
         self.assertEqual(action, "refresh_catalogs")
         self.assertEqual(profile, {})
         callback({})
         self.assertEqual(self.window.features.environment.toPlainText(), "unfinished JSON")
-        self.assertFalse((self.repository.directory / 'profiles' / (self.game.id + '.json')).exists())
+        self.assertFalse(
+            (self.repository.directory / "profiles" / (self.game.id + ".json")).exists()
+        )
 
     def test_queued_action_keeps_its_original_executable(self):
         self.window.start_next = lambda: None
         original = self.window.selected.executable
-        self.window.enqueue_feature('apply_display')
-        self.window.selected.executable = str(self.root / 'another.exe')
-        self.assertEqual(self.window.queue[0][0].executable, original)
+        self.window.enqueue_feature("apply_display")
+        from dataclasses import replace
+
+        self.window.selected = replace(
+            self.window.selected, executable=str(self.root / "another.exe")
+        )
+        self.assertEqual(self.window.queue[0].game.executable, original)
         self.window.queue.clear()
 
     def test_late_shader_picker_cannot_deploy_to_a_newly_selected_game(self):
         features = self.window.features
         features.shader_list.setCurrentRow(0)
-        with patch.object(features, 'job') as job, patch.object(features, 'effect_picker') as picker:
+        with (
+            patch.object(features, "job") as job,
+            patch.object(features, "effect_picker") as picker,
+        ):
             features.choose_effects()
             callback = job.call_args.args[2]
             from dataclasses import replace
-            self.window.selected = replace(self.window.selected, id='other')
-            callback({'id': 'pack', 'files': []})
+
+            self.window.selected = replace(self.window.selected, id="other")
+            callback({"id": "pack", "files": []})
             picker.assert_not_called()
 
     def test_late_vkbasalt_result_saves_only_the_originating_game(self):
         features = self.window.features
         origin = self.window.selected
         from dataclasses import replace
-        other = replace(origin, id='other')
-        with patch('optidx_desktop.feature_ui.QInputDialog.getItem', return_value=('cas', True)), \
-                patch.object(features, 'job') as job:
+
+        other = replace(origin, id="other")
+        with (
+            patch("optidx_desktop.feature_ui.QInputDialog.getItem", return_value=("cas", True)),
+            patch.object(features, "job") as job,
+        ):
             features.vulkan_effects()
         callback = job.call_args.args[2]
         self.window.selected = other
-        features.fields['vkbasalt_config'].setText('/other/config')
-        callback({'path': '/origin/config'})
-        self.assertEqual(self.repository.preferences(origin)['vkbasalt_config'], '/origin/config')
-        self.assertNotIn('vkbasalt_config', self.repository.preferences(other))
-        self.assertEqual(features.fields['vkbasalt_config'].text(), '/other/config')
+        features.fields["vkbasalt_config"].setText("/other/config")
+        callback({"path": "/origin/config"})
+        self.assertEqual(self.repository.preferences(origin)["vkbasalt_config"], "/origin/config")
+        self.assertNotIn("vkbasalt_config", self.repository.preferences(other))
+        self.assertEqual(features.fields["vkbasalt_config"].text(), "/other/config")
 
     def test_shared_profile_preserves_game_specific_paths_and_packages(self):
         from dataclasses import replace
         from optidx_desktop.storage import atomic_json
-        other = replace(self.window.selected, id='other')
-        private = {'dll_folder': 'Own/Plugin', 'vkbasalt_config': '/own/config', 'reframework_asset': 'Own.zip',
-                   'prefix': '/own/prefix', 'environment': {'WINEPREFIX': '/own/prefix'}}
+
+        other = replace(self.window.selected, id="other")
+        private = {
+            "dll_folder": "Own/Plugin",
+            "vkbasalt_config": "/own/config",
+            "reframework_asset": "Own.zip",
+            "prefix": "/own/prefix",
+            "environment": {"WINEPREFIX": "/own/prefix"},
+        }
         self.repository.save_preferences(other, private)
-        shared = {**private, 'dll_folder': 'Foreign/Plugin', 'reframework_asset': 'WrongGame.zip',
-                  'environment': {'WINEPREFIX': '/foreign/prefix'}, 'peak_nits': '1000'}
-        atomic_json(self.repository.directory / 'shared-profiles.json', {'Shared': shared})
-        with patch('optidx_desktop.feature_ui.QInputDialog.getItem', return_value=('Shared', True)), \
-                patch.object(self.window.features, 'games_picker', return_value=[other]):
+        shared = {
+            **private,
+            "dll_folder": "Foreign/Plugin",
+            "reframework_asset": "WrongGame.zip",
+            "environment": {"WINEPREFIX": "/foreign/prefix"},
+            "peak_nits": "1000",
+        }
+        atomic_json(self.repository.directory / "shared-profiles.json", {"Shared": shared})
+        with (
+            patch("optidx_desktop.feature_ui.QInputDialog.getItem", return_value=("Shared", True)),
+            patch.object(self.window.features, "games_picker", return_value=[other]),
+        ):
             self.window.features.batch_profile()
         saved = self.repository.preferences(other)
         self.assertTrue(all(saved[key] == value for key, value in private.items()))
-        self.assertEqual(saved['peak_nits'], '1000')
+        self.assertEqual(saved["peak_nits"], "1000")
 
     def test_invalid_environment_is_rejected_when_saving_instead_of_at_launch(self):
         self.window.features.environment.setPlainText('["not an object"]')
-        with patch.object(self.window, 'report_error') as error:
+        with patch.object(self.window, "report_error") as error:
             self.assertFalse(self.window.save_profile())
-        self.assertIn('JSON object', error.call_args.args[0])
+        self.assertIn("JSON object", error.call_args.args[0])
         self.window.features.environment.setPlainText('{"PROTON_ENABLE_WAYLAND": false}')
-        self.assertEqual(self.window.features.preferences()['environment']['PROTON_ENABLE_WAYLAND'], '0')
-        self.window.features.environment.setPlainText('[]')
-        with patch.object(self.window, 'report_error') as error:
+        self.assertEqual(
+            self.window.features.preferences()["environment"]["PROTON_ENABLE_WAYLAND"], "0"
+        )
+        self.window.features.environment.setPlainText("[]")
+        with patch.object(self.window, "report_error") as error:
             self.window.features.export_profile()
             self.window.features.save_named_profile()
         self.assertEqual(error.call_count, 2)
 
     def test_expanded_profile_restores_channels_dll_choices_and_linux_controls(self):
-        features=self.window.features
-        features.fields['reshade_channel'].setCurrentIndex(features.fields['reshade_channel'].findData('nightly'))
-        features.fields['api_override'].setCurrentIndex(features.fields['api_override'].findData('DX11'))
-        features.fields['dlss_sr_scale'].setText('75')
+        features = self.window.features
+        features.fields["reshade_channel"].setCurrentIndex(
+            features.fields["reshade_channel"].findData("nightly")
+        )
+        features.fields["api_override"].setCurrentIndex(
+            features.fields["api_override"].findData("DX11")
+        )
+        features.fields["dlss_sr_scale"].setText("75")
         features.environment.setPlainText('{"DXVK_HUD":"fps"}')
-        features.dll_kind.setCurrentIndex(features.dll_kind.findData('dlssnr'))
-        features.dll_version.setCurrentText('310.8.0')
-        features.dll_folder.setText('Engine/Plugins/DLSS')
-        features.drs['NGX_DLSSG_MULTI_FRAME_COUNT'].setCurrentIndex(features.drs['NGX_DLSSG_MULTI_FRAME_COUNT'].findData('2'))
-        self.window.save_profile();self.window.load_profile()
-        profile=self.repository.preferences(self.game)
-        self.assertEqual(profile['reshade_channel'],'nightly')
-        self.assertEqual(profile['environment'],{'DXVK_HUD':'fps'})
-        self.assertEqual(profile['drs']['NGX_DLSSG_MULTI_FRAME_COUNT'],'2')
-        self.assertEqual(features.dll_kind.currentData(),'dlssnr')
-        self.assertEqual(features.dll_version.currentText(),'310.8.0')
-        self.assertEqual(features.dll_folder.text(),'Engine/Plugins/DLSS')
+        features.dll_kind.setCurrentIndex(features.dll_kind.findData("dlssnr"))
+        features.dll_version.setCurrentText("310.8.0")
+        features.dll_folder.setText("Engine/Plugins/DLSS")
+        features.drs["NGX_DLSSG_MULTI_FRAME_COUNT"].setCurrentIndex(
+            features.drs["NGX_DLSSG_MULTI_FRAME_COUNT"].findData("2")
+        )
+        self.window.save_profile()
+        self.window.load_profile()
+        profile = self.repository.preferences(self.game)
+        self.assertEqual(profile["reshade_channel"], "nightly")
+        self.assertEqual(profile["environment"], {"DXVK_HUD": "fps"})
+        self.assertEqual(profile["drs"]["NGX_DLSSG_MULTI_FRAME_COUNT"], "2")
+        self.assertEqual(features.dll_kind.currentData(), "dlssnr")
+        self.assertEqual(features.dll_version.currentText(), "310.8.0")
+        self.assertEqual(features.dll_folder.text(), "Engine/Plugins/DLSS")
 
     def test_real_worker_import_and_addon_deployment_updates_the_library(self):
-        from test_core import pe_fixture
-        (self.game.target/'d3d12-ReShade64.dll').write_bytes(pe_fixture())
-        path=self.root/'custom.addon64';path.write_bytes(pe_fixture())
-        self.window.enqueue_feature('import_asset',{'path':str(path),'kind':'addon'})
+        from helpers import pe_fixture
+
+        (self.game.target / "d3d12-ReShade64.dll").write_bytes(pe_fixture())
+        path = self.root / "custom.addon64"
+        path.write_bytes(pe_fixture())
+        self.window.enqueue_feature("import_asset", {"path": str(path), "kind": "addon"})
+
         def finish():
-            deadline=time.monotonic()+8
-            while (self.window.process is not None or self.window.queue) and time.monotonic()<deadline:
-                self.app.processEvents();time.sleep(0.01)
+            deadline = time.monotonic() + 8
+            while (
+                self.window.process is not None or self.window.queue
+            ) and time.monotonic() < deadline:
+                self.app.processEvents()
+                time.sleep(0.01)
             self.assertIsNone(self.window.process)
-            self.assertTrue(self.window.result['ok'])
+            self.assertTrue(self.window.result["ok"])
+
         finish()
-        key=self.window.result['data']['id']
-        self.assertGreater(self.window.features.asset_library.count(),0)
-        self.window.enqueue_feature('deploy_asset',{'id':key})
+        key = self.window.result["data"]["id"]
+        self.assertGreater(self.window.features.asset_library.count(), 0)
+        self.window.enqueue_feature("deploy_asset", {"id": key})
         finish()
-        self.assertTrue((self.game.target/'custom.addon64').exists())
-        self.assertGreater(self.window.features.managed.count(),0)
+        self.assertTrue((self.game.target / "custom.addon64").exists())
+        self.assertGreater(self.window.features.managed.count(), 0)
 
     def test_helix_removal_button_runs_a_targeted_job_and_updates_the_profile(self):
         from optidx_desktop.backend import load_backend
         from optidx_desktop.storage import atomic_json
+
         module = load_backend()
-        relative = 'OptiScaler/HelixSR/helixsr.dll'
+        relative = "OptiScaler/HelixSR/helixsr.dll"
         helix = self.game.target / relative
         helix.parent.mkdir(parents=True)
-        helix.write_bytes(b'MZ HelixSR')
-        lossy = self.game.target / 'OptiScaler/amd_fidelityfx_upscaler_dx12.dll'
-        lossy.write_bytes(b'MZ lossy')
-        (self.game.target / 'OptiScaler.ini').write_text('[Libraries]\nFfxDx12SRPath=' + module.proton_path(helix) + '\n')
-        (self.game.target / '.optidx-files').write_text(relative + '\nOptiScaler/amd_fidelityfx_upscaler_dx12.dll\n')
-        atomic_json(self.game.target / '.optidx-components.json', {'files': {'helixsr': [relative]}, 'selected': ['helixsr', 'amd_fsr']})
-        self.window.components['helixsr'].setChecked(True)
+        helix.write_bytes(b"MZ HelixSR")
+        lossy = self.game.target / "OptiScaler/amd_fidelityfx_upscaler_dx12.dll"
+        lossy.write_bytes(b"MZ lossy")
+        (self.game.target / "OptiScaler.ini").write_text(
+            "[Libraries]\nFfxDx12SRPath=" + module.proton_path(helix) + "\n"
+        )
+        (self.game.target / ".optidx-files").write_text(
+            relative + "\nOptiScaler/amd_fidelityfx_upscaler_dx12.dll\n"
+        )
+        atomic_json(
+            self.game.target / ".optidx-components.json",
+            {"files": {"helixsr": [relative]}, "selected": ["helixsr", "amd_fsr"]},
+        )
+        self.window.components["helixsr"].setChecked(True)
         self.window.save_profile()
         self.window.features.refresh()
         self.assertTrue(self.window.features.remove_helix_button.isEnabled())
@@ -274,11 +423,11 @@ class UiTests(unittest.TestCase):
             self.app.processEvents()
             time.sleep(0.01)
         self.assertIsNone(self.window.process)
-        self.assertTrue(self.window.result['ok'])
+        self.assertTrue(self.window.result["ok"])
         self.assertFalse(helix.exists())
-        self.assertEqual(lossy.read_bytes(), b'MZ lossy')
-        self.assertFalse(self.window.components['helixsr'].isChecked())
-        self.assertFalse(self.repository.preferences(self.game)['components']['helixsr'])
+        self.assertEqual(lossy.read_bytes(), b"MZ lossy")
+        self.assertFalse(self.window.components["helixsr"].isChecked())
+        self.assertFalse(self.repository.preferences(self.game)["components"]["helixsr"])
         self.assertFalse(self.window.features.remove_helix_button.isEnabled())
 
 

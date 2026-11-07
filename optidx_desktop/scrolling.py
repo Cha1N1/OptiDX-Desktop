@@ -1,4 +1,5 @@
 """Accelerated mouse-wheel motion scoped to this window's scroll areas."""
+
 import time
 
 from PySide6.QtCore import QEvent, QEasingCurve, QObject, QPropertyAnimation, Qt
@@ -10,11 +11,12 @@ from .motion import reduced_motion
 
 class WheelMotion(QObject):
     """Accumulate a bounded target; reverse immediately and reset after a pause."""
+
     def __init__(self, area, bar):
         super().__init__(area)
         self.area = area
         self.bar = bar
-        self.animation = QPropertyAnimation(bar, b'value', self)
+        self.animation = QPropertyAnimation(bar, b"value", self)
         self.animation.setDuration(140)
         self.animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.last_tick = 0
@@ -44,12 +46,24 @@ class WheelMotion(QObject):
         if not continuing:
             self.fraction = 0.0
         gain = 1 + self.burst * 0.35
-        distance = -delta / 120 * self.bar.singleStep() * QApplication.wheelScrollLines() * gain + self.fraction
+        distance = (
+            -delta / 120 * self.bar.singleStep() * QApplication.wheelScrollLines() * gain
+            + self.fraction
+        )
         # Bound pending travel, so stopping the wheel never leaves a long coast.
-        span = self.area.viewport().height() if self.bar.orientation() == Qt.Orientation.Vertical else self.area.viewport().width()
+        span = (
+            self.area.viewport().height()
+            if self.bar.orientation() == Qt.Orientation.Vertical
+            else self.area.viewport().width()
+        )
         limit = max(self.bar.singleStep() * 3, span * 1.5)
-        target = min(self.bar.maximum(), max(self.bar.minimum(),
-                     min(self.bar.value() + limit, max(self.bar.value() - limit, base + distance))))
+        target = min(
+            self.bar.maximum(),
+            max(
+                self.bar.minimum(),
+                min(self.bar.value() + limit, max(self.bar.value() - limit, base + distance)),
+            ),
+        )
         self.animation.stop()
         self.last_tick, self.direction, self.target = now, direction, int(round(target))
         self.fraction = target - self.target
@@ -68,34 +82,54 @@ class SmoothScrolling(QObject):
     def __init__(self, window):
         super().__init__(window)
         self.window = window
-        QApplication.instance().installEventFilter(self)
+        app = QApplication.instance()
+        app.installEventFilter(self)
+        # Popup widgets can outlive the window during interpreter teardown.
+        app.aboutToQuit.connect(self.detach)
+
+    def detach(self):
+        QApplication.instance().removeEventFilter(self)
 
     def eventFilter(self, watched, event):
         kind = event.type()
-        if kind not in {QEvent.Type.Wheel, QEvent.Type.Show, QEvent.Type.Hide,
-                        QEvent.Type.KeyPress, QEvent.Type.MouseButtonPress}:
+        if kind not in {
+            QEvent.Type.Wheel,
+            QEvent.Type.Show,
+            QEvent.Type.Hide,
+            QEvent.Type.KeyPress,
+            QEvent.Type.MouseButtonPress,
+        }:
             return False
         if not isinstance(watched, QWidget) or not self.window.isAncestorOf(watched):
             return False
         area = watched if isinstance(watched, QAbstractScrollArea) else watched.parentWidget()
-        if not isinstance(area, QAbstractScrollArea) or area.window().windowType() == Qt.WindowType.Popup:
+        if (
+            not isinstance(area, QAbstractScrollArea)
+            or area.window().windowType() == Qt.WindowType.Popup
+        ):
             return False
         if kind == QEvent.Type.Show:
             if isinstance(area, QAbstractItemView):
                 area.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
                 area.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
             return False
-        motions = getattr(area, '_wheel_motions', {})
+        motions = getattr(area, "_wheel_motions", {})
         if kind != QEvent.Type.Wheel:
-            for motion in motions.values(): motion.cancel()
+            for motion in motions.values():
+                motion.cancel()
             return False
         if watched is not area.viewport():
             return False
-        if (reduced_motion(self.window) or not event.pixelDelta().isNull() or
-                event.device().type() == QInputDevice.DeviceType.TouchPad or
-                event.phase() != Qt.ScrollPhase.NoScrollPhase or
-                event.modifiers() != Qt.KeyboardModifier.NoModifier or event.buttons() != Qt.MouseButton.NoButton):
-            for motion in motions.values(): motion.cancel()
+        if (
+            reduced_motion(self.window)
+            or not event.pixelDelta().isNull()
+            or event.device().type() == QInputDevice.DeviceType.TouchPad
+            or event.phase() != Qt.ScrollPhase.NoScrollPhase
+            or event.modifiers() != Qt.KeyboardModifier.NoModifier
+            or event.buttons() != Qt.MouseButton.NoButton
+        ):
+            for motion in motions.values():
+                motion.cancel()
             return False  # Native precision gestures, modifiers and selection.
         vertical = bool(event.angleDelta().y())
         delta = event.angleDelta().y() if vertical else event.angleDelta().x()

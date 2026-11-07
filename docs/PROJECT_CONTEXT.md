@@ -3,6 +3,261 @@
 This is the continuation record for the standalone Linux desktop application.
 Use release notes for shipped changes and focused reports for detailed findings.
 
+## Local release preparation — 2026-11-07
+
+Prepared 0.3.6 from the current local code, separating post-0.3.5 maintenance and
+custom-upscaler work into a new release entry. Refreshed README highlights,
+versioned filenames, validation count, parity heading and publishing instructions.
+The existing synthetic README screenshot remains explicitly labelled as 0.3.5.
+No application behavior changed beyond the version identifier. Historical review
+reports and backend provenance are preserved.
+
+Built the AppImage with the existing local runtime, preserving older artifacts.
+Prepared a clean source directory, tar.gz, checksum and per-file SHA-256 manifest
+under dist using explicit source/root allowlists plus Git ignore filtering.
+Excluded Git metadata, build/dist output, caches, private state and prepared assets.
+The local repository still has no commits; no commit, push, tag or publication
+was performed. Original OptiDX and OptiScaler repositories were untouched.
+
+Validation: all 243 tests pass in source and with the rebuilt AppDir interpreter.
+Source and FUSE-free AppImage fresh-data offscreen previews pass; packaged preview
+visually inspected. Version, backend help, AppImage checksum, backend snapshot
+checksum and packaged application/backend source parity pass. Black/Ruff could
+not run because neither tool is installed in the available environment; no Python
+formatting changes were made. Deployment tests use temporary game folders; live
+download, gameplay and cross-distribution compatibility remain unverified.
+
+## Executable folder recovery — 2026-10-30
+
+Selecting another executable folder under the same game ID is distinct from
+moving an installation. Keep the existing legacy baseline bound to its original
+folder and use a target-hashed baseline directory for the new folder. Do not
+rewrite old snapshot targets or restore old-folder originals into the new folder.
+Snapshot pruning protects every target baseline; returning to the previous
+executable can still restore its originals. Verified whole-install relocation
+continues to rebind recovery metadata, including target-scoped records.
+
+Core package updates already retain the current OptiScaler.ini bytes; now refresh
+that mutable configuration's ledger hash before deployment so in-game/user saves
+do not falsely block updates. Binary conflict checks remain enforced. Regressions
+use temporary folders and cover both folders' originals, pruning, edited INI
+preservation and edited binary rejection. All 243 source tests and 24 focused
+bundled-interpreter tests pass; rebuilt AppImage checksum, packaged-source parity,
+lint and clean FUSE-free offscreen startup pass. No real game installation was modified.
+
+## CustomProviders detection follow-up — 2026-10-30
+
+The managed update correctly installed the current fork nightly, but the custom
+upscaler preflight falsely rejected it because it required the exact diagnostic
+`Can't load custom upscaler {} from {}`. Upstream refactored CustomUpscalers to
+`OptiScaler/misc/CustomProviders.h` and changed that message to printf formatting
+(`Can't load custom upscaler %s`). The custom/<name>/ffx and dlss layout is unchanged.
+
+Recognize the diagnostic prefix independent of format arguments, with the DX12
+custom-folder resolver diagnostic as another capability indicator. Report unknown
+capability as an identification failure, without incorrectly asserting that the
+installed build is stable 0.9.4. Do not change source selections or demand another
+OptiScaler update when the installed DLL is already capable. Regression coverage
+includes both diagnostic styles, the refactored resolver and an incapable binary.
+A read-only check against the actual installed current fork DLL now succeeds.
+All 241 tests pass in source and bundled Python; the rebuilt package passes
+the complete loader preflight against the installed DLL read-only. Checksum,
+source parity, lint/format, backend help and clean FUSE-free startup pass.
+No real-game/profile writes; rebuilt local 0.3.5 with existing runtime.
+
+## Legacy package overlap updates — 2026-10-30
+
+An older setup successfully relocated but the next core update blocked on
+`Licenses/FidelityFX_v2_LICENSE.md`: its component record owned `Licenses` and
+`OptiScaler` as directories, while the flat manifest omitted their children.
+`legacy_core_overlaps` now identifies only new-package members under those two
+explicitly recorded directories, requiring a prior marker/proxy manifest and no
+modern core asset group. `assets.deploy` accepts a scoped `replace_unmanaged`
+allowlist that bypasses only the unknown-file approval check; it still backs up
+previous bytes and enforces owner/hash/path/case/symlink safeguards.
+
+Never expand ownership to all files in those folders. Exclude custom/legacy
+HelixSR subtrees; preserve exact paths explicitly owned by other legacy components
+(in particular the independently replaced AMD DLL) when preparing the core archive.
+Do not turn on global allow_foreign or weaken edited modern binary checks.
+Regression fixtures cover vendor/license upgrade with original restoration,
+unknown/custom collisions, independent AMD preservation and modern hash conflicts.
+Validation: all 240 tests pass in source and bundled Python, including four new
+overlap regressions.
+The current cached upstream archive installs successfully against a temporary
+copy of the reported legacy package overlaps, with the license updated and the
+independent AMD DLL preserved. Rebuilt local 0.3.5 with the existing runtime;
+checksum, source parity, Black/Ruff and clean FUSE-free startup pass.
+No real-game writes or changes to the backend script/provenance.
+
+## Moved installation recovery — 2026-10-30
+
+Worker mutation jobs now rebind moved-install markers before taking their normal
+operation snapshots. `relocation.py` requires the old target to be absent, the
+same relative executable layout, and verified owned binaries/original blobs.
+Legacy component manifests plus the recorded Cyboman SHA-256 are accepted when
+no asset ledger exists. Missing ownership evidence, modified binaries, existing
+old installs and linked/unsafe recovery paths remain blockers. Read-only jobs
+can inspect moved games but do not migrate their files.
+
+Rebind only snapshot metadata for this game ID's old target/root; verify every
+payload before edits, retain prior metadata/modes in a durable relocation journal,
+and publish the marker last. In-process failures restore prior bytes; an
+interruption before marker publication can retry with mixed old/new snapshot
+scopes. Subsequent failed operations roll back to the newly bound location.
+No payload bytes, other game IDs, launch settings or arbitrary paths are rewritten.
+The direct validate_game API remains strict unless its worker caller explicitly
+allows preliminary moved-target validation. No backend script/snapshot changes.
+
+Tests cover moved original recovery, copy/wrong-folder rejection, modified binary
+and corrupt snapshot refusal, marker-only rejection, rollback on marker-write
+failure, interrupted root/target metadata rebinding, linked recovery directories,
+legacy installations without an asset ledger, and failed/read-only worker jobs.
+A mocked-write preflight against the user's reported legacy setup passed without
+changing its marker. Existing games were only inspected; execution testing uses
+temporary game folders. All 236 tests pass in source and with bundled Python. Local AppImage rebuilt with the existing runtime;
+checksum, source parity, backend help and fresh-data FUSE-free startup pass.
+Version unchanged and no commit/publication.
+
+## Lossy2 selection follow-up — 2026-10-29
+
+A user deployment failed because the old Lossy2 checkbox was selectable with the
+current archive. Gate that choice on an explicit older release pin or local
+archive. Keep saved/draft selections visible and untickable, show a corrective
+message and disable the custom install action until resolved. Never silently
+substitute retrained Lossy for an explicit old Lossy2 choice. Backend preflight
+rejects the combination before release lookup/download. Existing installed
+variants remain intact. Added UI stale-choice/source-transition and backend
+no-download regression coverage. All 226 tests pass in source and bundled Python; rebuilt local 0.3.5
+with the existing runtime. Checksum, packaged-source parity, clean offscreen
+startup and backend help pass. No version bump/publication or real-game writes.
+
+## Selected custom upscalers — 2026-10-29
+
+Added an independent Installation dropdown/action for selected custom variants.
+`upscalers.py` validates actual x64 PE export tables for FFX/NGX, requires the
+installed OptiScaler custom-loader diagnostic marker, resolves hardware-specific
+Cyboman archives and deploys curated variant groups through the existing asset
+ledger. `upscaler_ui.py` exposes bound per-game/draft checkboxes and local HelixSR
+DLL paths. No backend snapshot changes; no existing direct-install migration.
+
+An explicit upstream-nightly source uses `optiscaler/OptiScaler-nightly`; the old
+Nightly source retains the configured fork. Stable 0.9.4 has no custom loader.
+The current upstream nightly archive was downloaded to /tmp and its marker
+verified. Public HelixSR 3.2.0 unprepared DLL exports match FFX and NGX respectively;
+users must supply locally prepared DLLs, and runtime compatibility needs gameplay
+verification. Never package prepared user assets or run setup at game startup.
+
+Cyboman's linked `dll-2026-10-29` release changes Lossy to retrained former Lossy2
+and adds `4.1.2l-exact` / `4.1.2l-lossy`; the archive has no separate lossy2 folder.
+Keep older Lossy2 explicit and fail on missing/ambiguous variants, with no silent
+fallback. Current hardware archive names include rx6000/rx7000/igpu-rdna2/igpu-rdna3;
+choose hardware explicitly. Copy only requested variants and their warning files.
+The new path does not use the legacy fixed-name lossy downloader. Managed groups
+update independently, retain source/hardware/pin provenance and use worker snapshot
+rollback; removing a selected DX12 variant resets its INI value preserving encoding.
+
+Validation: all 224 tests pass in source and with bundled Python. Added failure
+coverage for partial custom deployment rollback, absent variants, malformed/wrong
+architecture exports, unsafe/ambiguous archives, case conflicts, external edits,
+profile/draft round-trips, popup multi-selection, source routing, update provenance
+and core-update preservation. Black and Ruff pass. Downloaded the current official
+nightly and RX6000 Cyboman archives to /tmp; all four current Cyboman variants
+installed and removed successfully in a temporary game directory (including both
+lossy warning files). Helix DLL export validation used public unprepared DLLs;
+prepared-network execution/gameplay has not been tested.
+
+Rebuilt the local 0.3.5 AppImage with the existing runtime; checksum, source parity,
+backend checksum/help and fresh-data FUSE-free offscreen preview checked. The
+custom section and dropdown were rendered and visually inspected. The popup
+preview exposed an app-wide scroll-filter teardown warning; detach that filter
+on Qt aboutToQuit before popup/window destruction. A fresh source preview now
+exits without warnings, and the seven scrolling checks pass. Version unchanged;
+no commits, publication, changes to other repositories or real-game writes.
+
+## Comprehensive source maintenance — 2026-10-18
+
+Implemented the supplied review's remaining safety/performance findings and
+maintenance proposals. See [the implementation record](MAINTENANCE_2026-10-18.md).
+Downloads retain TLS verification and available asset digests; corrupt critical
+JSON blocks operations; atomic writes fsync; wrappers tolerate optional setup
+failures; shared per-display HDR users preserve lifetime; config edits retain
+encoding; graceful worker signals roll back. Optional updates now transact by
+group, retaining the dependent core as one unit and stopping on incomplete recovery.
+
+Game values are immutable and queue entries are named Job records. Existing
+Steam/Heroic path-based identities migrate before workflow state loads, retaining
+legacy evidence and exact recovery bytes. Profiles have versioned migrations.
+BackendContext confines legacy mutable backend state and restores cwd/environment;
+keep management jobs in separate processes. Page-owned raw draft bindings replace
+the central widget registry; workflow layout ownership is explicit. Semantic QSS
+tokens replace hex substitution. Drafts debounce at 500 ms; UI inspection is cached
+briefly; DLL discovery is asynchronous and bound to game/request generation.
+Checked shaders share one job; 7z solid archives extract once after preflight.
+Snapshot payloads share per-game SHA-256 objects; completed history/logs are bounded
+while unresolved recovery is protected. Black/Ruff and offscreen CI are configured.
+
+The source/Git backup is
+`/home/DwE/project-backups/OptiDX-Desktop-before-maintenance-20261018.tar.gz`.
+The original script and OptiScaler repositories are unchanged. Backend checksum
+was refreshed and original provenance verified unchanged. Version remains 0.3.5;
+no commit, push, external AppImage replacement, or publication.
+
+Validation: all 207 tests pass in source and with the rebuilt AppImage's bundled
+interpreter. Black checks all 54 Python files; Ruff passes. The local 0.3.5 AppImage
+was rebuilt with the existing verified runtime; checksum, packaged-source equality,
+backend checksum, FUSE-free version/help and fresh-data offscreen startup pass.
+Source wide/compact synthetic HelixSR previews and the packaged preview were
+visually inspected. Python wheel creation plus the installed command/module wrapper
+were smoke-tested outside the source directory. Tests cover real SIGTERM rollback,
+per-group update failure, corruption, BOM/endian/newline preservation, migrations,
+stale metadata, solid archives and delayed UI results. Temporary fixtures only;
+no real game writes/launches, live mod downloads, personal-state migration or
+actual HDR changes. Gameplay/cross-distribution/power-failure coverage remains
+limited. CI configuration is prepared locally; no remote CI run was triggered.
+
+## Code quality review — 2026-10-17
+
+The [follow-up review](REVIEW_2026-10-17.md) reproduced three issues:
+compacted baselines omit originals overwritten by later operations, ReShade
+pruning bypasses asset restoration and retains stale ownership, and Cyboman
+replacement of an archive-bundled AMD DLL invalidates the OptiScaler ledger hash.
+The review itself changed no application code. The subsequent fixes merge newly
+overwritten originals into the compact baseline before snapshot disposal, remove
+ReShade through the asset ledger during pruning, and transfer AMD DLL ownership
+and original recovery records to `backend:amd_fsr`. Core updates retain that
+independently owned DLL. Old dual records migrate only when backend component
+ownership and Cyboman's recorded SHA-256 verify the replacement; external edits
+remain conflicts. Failure tests cover ledger-write rollback. Historical review
+reports remain unchanged. Version remains 0.3.5; no publication was requested.
+
+Validation: 183 tests passed in the source full run; the subsequently added
+ledger-write failure regression passed in the 18-test focused source run, and
+all 184 tests passed with bundled Python. All 17 component tests also passed.
+Rebuilt `dist/OptiDX-Desktop-0.3.5-x86_64.AppImage` using the existing verified
+runtime. Package checksum, bundled-source equality, backend snapshot checksum,
+backend help, and fresh-data FUSE-free offscreen startup passed; the preview was
+visually inspected. Temporary fixtures only; no real games, live downloads, or
+gameplay validation. No commit, push, or publication.
+
+## Code quality review — 2026-10-16
+
+The [historical source review](REVIEW_2026-10-16.md) recorded seven findings.
+They are addressed in the current local source: core payload preflight/architecture
+validation, direct HelixSR pruning restoration, uninstall error propagation, DXVK
+and standalone ReShade update dispatch, and source manual launch routing.
+
+Operation snapshot history now defaults to off. Jobs still take temporary rollback
+copies, deleting them on success or successful rollback. Opt-in retention defaults
+to three snapshots per game (configurable 1–50). Explicit cleanup preserves compact
+verified original-file baselines and snapshots marked active/manual recovery.
+Existing completed history is kept until explicit cleanup or opt-in bounded
+retention. No real game installation was changed for validation. See
+[the implementation record](REVIEW_FIXES_2026-10-16.md) for details. All 179 tests
+pass in source and with bundled Python; the 0.3.5 AppImage was rebuilt and its
+checksum, FUSE-free preview, and backend help checked. Personal backup history
+was not deleted during implementation.
+
 ## Boundaries and durable decisions
 
 - Primary folder: `/home/DwE/OptiDX-Desktop`.

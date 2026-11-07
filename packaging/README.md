@@ -1,6 +1,6 @@
 # AppImage build
 
-The AppImage contains the desktop package, its backend, Python, PyYAML, PySide6/Qt (Wayland/X11/offscreen plugins), curl, unzip, and 7-Zip. Prepared HelixSR network files and personal library/profile data are not bundled.
+The AppImage contains the desktop package, its backend, Python, PyYAML, PySide6/Qt (Wayland/X11/offscreen plugins), curl, unzip, and 7-Zip. Prepared HelixSR DLLs and personal library/profile data are not bundled.
 
 The current build bundles its own dynamic loader and C runtime. Python and bundled native tools execute through that private loader; it does not export a bundled `LD_LIBRARY_PATH`. Graphics-driver libraries are supplied by the host desktop. Before launching an external launcher or game, the original PATH, Python, and Qt environment is restored. Wayland, HDR, and prefix variables are retained.
 
@@ -23,8 +23,8 @@ This local build used the static runtime extracted from an existing ML4W AppImag
 Output:
 
 ```text
-dist/OptiDX-Desktop-0.3.5-x86_64.AppImage
-dist/OptiDX-Desktop-0.3.5-x86_64.AppImage.sha256
+dist/OptiDX-Desktop-0.3.6-x86_64.AppImage
+dist/OptiDX-Desktop-0.3.6-x86_64.AppImage.sha256
 ```
 
 The unpacked AppDir and runtime build files live under `build/`. Third-party license files from installed packages are included under `usr/share/licenses`. Build/runtime versions and host graphics-library names are recorded in `usr/share/optidx-desktop/BUILD_INFO.json`.
@@ -40,14 +40,14 @@ supports gzip and XZ; zstd is not supported by that builder.
 ## Use
 
 ```bash
-chmod +x OptiDX-Desktop-0.3.5-x86_64.AppImage
-./OptiDX-Desktop-0.3.5-x86_64.AppImage
+chmod +x OptiDX-Desktop-0.3.6-x86_64.AppImage
+./OptiDX-Desktop-0.3.6-x86_64.AppImage
 ```
 
 On systems without usable FUSE:
 
 ```bash
-./OptiDX-Desktop-0.3.5-x86_64.AppImage --appimage-extract-and-run
+./OptiDX-Desktop-0.3.6-x86_64.AppImage --appimage-extract-and-run
 ```
 
 Your existing `~/.local/share/optidx-desktop` profiles, `~/.cache/optidx` downloads, and `~/.local/share/optidx/helixsr` prepared files are reused. Keep the AppImage at a stable path if using it as a game wrapper.
@@ -57,11 +57,11 @@ Steam: **Copy launch options** emits a command using the persistent AppImage pat
 ## Checks
 
 ```bash
-./dist/OptiDX-Desktop-0.3.5-x86_64.AppImage --appimage-extract-and-run --runtime-info
-QT_QPA_PLATFORM=offscreen ./dist/OptiDX-Desktop-0.3.5-x86_64.AppImage --appimage-extract-and-run --screenshot /tmp/optidx-appimage.png
-./dist/OptiDX-Desktop-0.3.5-x86_64.AppImage --appimage-extract-and-run --backend --help
+./dist/OptiDX-Desktop-0.3.6-x86_64.AppImage --appimage-extract-and-run --runtime-info
+QT_QPA_PLATFORM=offscreen ./dist/OptiDX-Desktop-0.3.6-x86_64.AppImage --appimage-extract-and-run --screenshot /tmp/optidx-appimage.png
+./dist/OptiDX-Desktop-0.3.6-x86_64.AppImage --appimage-extract-and-run --backend --help
 cd dist
-sha256sum -c OptiDX-Desktop-0.3.5-x86_64.AppImage.sha256
+sha256sum -c OptiDX-Desktop-0.3.6-x86_64.AppImage.sha256
 ```
 
 This initial AppImage is built with the current CachyOS/Arch runtime packages and tested locally. Other distributions and older CPU targets have not been validated; cross-distribution testing should precede advertising broad compatibility.
@@ -77,7 +77,7 @@ GUI, not the environment passed to games or launchers. Restart an existing windo
 with the rebuilt AppImage to apply it. For explicit testing:
 
 ```bash
-QT_QPA_PLATFORM=wayland ./dist/OptiDX-Desktop-0.3.5-x86_64.AppImage --appimage-extract-and-run
+QT_QPA_PLATFORM=wayland ./dist/OptiDX-Desktop-0.3.6-x86_64.AppImage --appimage-extract-and-run
 ```
 
 Qt platform selection references: [Qt QPA](https://doc.qt.io/qt-6/qpa.html) and

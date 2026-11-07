@@ -10,32 +10,21 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from optidx_desktop.backend import bind_target, execute_backend, launch_options, load_backend, validate_game
+from optidx_desktop.backend import (
+    bind_target,
+    execute_backend,
+    launch_options,
+    load_backend,
+    validate_game,
+)
 from optidx_desktop.backups import remember_baseline, restore_originals, snapshot
 from optidx_desktop.inspection import inspect_game, manifest_paths, pe_info
 from optidx_desktop.library import manual_game, scan_library, vdf_parse
-from optidx_desktop.models import Game, game_id
+from optidx_desktop.models import Game
 from optidx_desktop.storage import Repository, atomic_json
 
 
-def pe_fixture(imports=("d3d12.dll",), bits=64):
-    data = bytearray(2048)
-    data[:2] = b"MZ"
-    struct.pack_into("<I", data, 0x3c, 0x80)
-    data[0x80:0x84] = b"PE\0\0"
-    struct.pack_into("<HH", data, 0x84, 0x8664 if bits == 64 else 0x14c, 1)
-    optional_size = 240 if bits == 64 else 224
-    struct.pack_into("<H", data, 0x94, optional_size)
-    struct.pack_into("<H", data, 0x98, 0x20b if bits == 64 else 0x10b)
-    struct.pack_into("<II", data, 0x98 + (112 if bits == 64 else 96) + 8, 0x1000, 20 * (len(imports) + 1))
-    section = 0x98 + optional_size
-    struct.pack_into("<IIII", data, section + 8, 1024, 0x1000, 1024, 512)
-    for i, name in enumerate(imports):
-        offset = 768 + 64 * i
-        struct.pack_into("<IIIII", data, 512 + 20 * i, 0, 0, 0, 0x1000 + offset - 512, 0)
-        encoded = name.encode() + b"\0"
-        data[offset:offset + len(encoded)] = encoded
-    return bytes(data)
+from helpers import pe_fixture
 
 
 class CoreTests(unittest.TestCase):
@@ -71,13 +60,17 @@ class CoreTests(unittest.TestCase):
         data = bytearray(pe_fixture(("opengl32.dll",)))
         struct.pack_into("<II", data, 0x98 + 112 + 13 * 8, 0x1000 + 600, 64)
         struct.pack_into("<IIIIIIII", data, 512 + 600, 1, 0x1000 + 750, 0, 0, 0, 0, 0, 0)
-        data[512 + 750:512 + 750 + 11] = b"d3d12.dll\0\0"
+        data[512 + 750 : 512 + 750 + 11] = b"d3d12.dll\0\0"
         self.executable.write_bytes(data)
         self.assertEqual(pe_info(self.executable)["apis"], ["DX12", "OpenGL"])
 
     def test_vdf_nested_and_escaped_paths(self):
-        self.assertEqual(vdf_parse('"libraryfolders" { "0" { "path" "C:\\\\Steam" } }')
-                         ["libraryfolders"]["0"]["path"], "C:\\Steam")
+        self.assertEqual(
+            vdf_parse('"libraryfolders" { "0" { "path" "C:\\\\Steam" } }')["libraryfolders"]["0"][
+                "path"
+            ],
+            "C:\\Steam",
+        )
 
     def test_steam_external_library_selects_shipping_binary_and_prefix(self):
         steam = self.home / ".local/share/Steam/steamapps"
@@ -86,9 +79,12 @@ class CoreTests(unittest.TestCase):
         game = library / "steamapps/common/MyGame/Binaries/Win64"
         game.mkdir(parents=True)
         (game / "MyGame-Win64-Shipping.exe").write_bytes(pe_fixture())
-        (steam / "libraryfolders.vdf").write_text('"libraryfolders" { "1" { "path" "' + str(library) + '" } }')
+        (steam / "libraryfolders.vdf").write_text(
+            '"libraryfolders" { "1" { "path" "' + str(library) + '" } }'
+        )
         (library / "steamapps/appmanifest_123.acf").write_text(
-            '"AppState" { "appid" "123" "name" "My Game" "installdir" "MyGame" }')
+            '"AppState" { "appid" "123" "name" "My Game" "installdir" "MyGame" }'
+        )
         games, warnings = scan_library(self.home)
         self.assertEqual(warnings, [])
         self.assertEqual(len(games), 1)
@@ -97,18 +93,35 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(games[0].prefix.endswith("compatdata/123/pfx"))
 
     def test_heroic_discovery_remembers_which_installation_owns_the_game(self):
-        config = self.home / '.var/app/com.heroicgameslauncher.hgl/config/heroic'
-        atomic_json(config / 'sideload_apps/library.json', {'games': [{'app_name': 'test',
-                    'title': 'Flatpak game', 'install_path': str(self.binary)}]})
+        config = self.home / ".var/app/com.heroicgameslauncher.hgl/config/heroic"
+        atomic_json(
+            config / "sideload_apps/library.json",
+            {
+                "games": [
+                    {"app_name": "test", "title": "Flatpak game", "install_path": str(self.binary)}
+                ]
+            },
+        )
         games, warnings = scan_library(self.home)
         self.assertEqual(warnings, [])
-        self.assertEqual(games[0].launcher_kind, 'flatpak')
-        self.assertEqual(Game.from_dict(games[0].to_dict()).launcher_kind, 'flatpak')
+        self.assertEqual(games[0].launcher_kind, "flatpak")
+        self.assertEqual(Game.from_dict(games[0].to_dict()).launcher_kind, "flatpak")
 
     def test_heroic_sideload_and_epic_profiles(self):
         heroic = self.home / ".config/heroic"
-        atomic_json(heroic / "sideload_apps/library.json", {"games": [{"title": "Actual Game", "app_name": "myid",
-                     "folder_name": self.game.root, "install": {"executable": str(self.executable)}}]})
+        atomic_json(
+            heroic / "sideload_apps/library.json",
+            {
+                "games": [
+                    {
+                        "title": "Actual Game",
+                        "app_name": "myid",
+                        "folder_name": self.game.root,
+                        "install": {"executable": str(self.executable)},
+                    }
+                ]
+            },
+        )
         atomic_json(heroic / "GamesConfig/myid.json", {"myid": {"winePrefix": "/my/prefix"}})
         games, warnings = scan_library(self.home)
         self.assertEqual(len(games), 1)
@@ -181,16 +194,27 @@ class CoreTests(unittest.TestCase):
     def test_exact_binary_adapter_preserves_title_and_never_launches(self):
         module = load_backend()
         calls = []
+
         def install(args):
             calls.append(args)
             self.assertTrue(module.detect_game())
             self.assertEqual(module.GAME_EXE, str(self.executable))
             self.assertEqual(module.GAME_NAME, "Actual Game")
-            (self.binary / ".optidx-files").write_text("renodx-test.addon64\n")
-        module.main = install
-        with patch.dict(os.environ, {"WINEPREFIX": "/wrong/prefix"}, clear=True), contextlib.redirect_stderr(io.StringIO()):
-            execute_backend(self.game, "update", {"mode": "renodx", "native_hdr": False, "prefix": "/right/prefix"}, module)
             self.assertEqual(os.environ["WINEPREFIX"], "/right/prefix")
+            (self.binary / ".optidx-files").write_text("renodx-test.addon64\n")
+
+        module.main = install
+        with (
+            patch.dict(os.environ, {"WINEPREFIX": "/wrong/prefix"}, clear=True),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            execute_backend(
+                self.game,
+                "update",
+                {"mode": "renodx", "native_hdr": False, "prefix": "/right/prefix"},
+                module,
+            )
+            self.assertEqual(os.environ["WINEPREFIX"], "/wrong/prefix")
         self.assertEqual(calls, [["--components=renodx,reshade", "--update", "--no-ue-hdr"]])
         with self.assertRaises(RuntimeError):
             module.launch_now()
@@ -198,7 +222,10 @@ class CoreTests(unittest.TestCase):
     def test_backend_reports_no_install_instead_of_success(self):
         module = load_backend()
         module.main = lambda args: None
-        with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(RuntimeError, "No installation"):
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            self.assertRaisesRegex(RuntimeError, "No installation"),
+        ):
             execute_backend(self.game, "install", {}, module)
 
     def test_adapter_cleanup_preserves_unrelated_addons(self):
@@ -236,8 +263,20 @@ class CoreTests(unittest.TestCase):
     def test_worker_failure_is_structured_and_makes_no_game_changes(self):
         request = {"game": self.game.to_dict(), "action": "install"}
         request["game"]["executable"] = str(self.root / "missing.exe")
-        result = subprocess.run([sys.executable, "-B", "-m", "optidx_desktop.worker", "--request", json.dumps(request),
-                                 "--data-dir", str(self.repository.directory)], capture_output=True, text=True)
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                "-m",
+                "optidx_desktop.worker",
+                "--request",
+                json.dumps(request),
+                "--data-dir",
+                str(self.repository.directory),
+            ],
+            capture_output=True,
+            text=True,
+        )
         self.assertEqual(result.returncode, 1)
         event = json.loads(result.stdout.splitlines()[-1])
         self.assertFalse(event["ok"])

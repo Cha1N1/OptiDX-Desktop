@@ -1,4 +1,4 @@
-# RHI parity status — Desktop 0.3.4
+# RHI parity status — Desktop 0.3.6
 
 Compared against the published [RHI README](https://github.com/RankFTW/RHI) and [guide](https://github.com/RankFTW/RHI/blob/main/docs/DETAILED_GUIDE.md) on 2026-10-12. “Implemented” describes code and local checks, not a guarantee that every third-party mod works in every Wine game.
 
@@ -19,16 +19,28 @@ Compared against the published [RHI README](https://github.com/RankFTW/RHI) and 
 | Updates and tray | Read-only availability records/badges, optional four-hour checks, tray mode, per-component exclusions | No application self-updater; direct non-GitHub custom URLs may require an explicit update to detect a changed payload |
 | Download watcher | Optional folder watching and notifications; addon/preset/archive drag-and-drop | Notifications do not silently install files; file-association/single-instance forwarding is not implemented |
 | Game launch | Store URIs; saved Wine/Proton/UMU commands; Bottles CLI; per-game argv/env; copied persistent profile wrappers | Store URI launch keeps launcher settings. Managed env/HDR needs the profile wrapper; running indicators cover managed direct launches |
-| Desktop HDR | KDE Plasma `kscreen-doctor` adapter, original state restored after command exit, deferred UE HDR completion | Other compositors are unsupported; forced termination of the wrapper cannot guarantee restoration |
+| Desktop HDR | KDE Plasma `kscreen-doctor` adapter, shared per-display sessions restore original state after the last managed command exits, deferred UE HDR completion | Other compositors are unsupported; forced termination of the wrapper cannot guarantee restoration |
 | Display/driver controls | Shared peak-nits values, screenshots/hotkeys, DXVK VSync/FPS; NVIDIA OpenGL VSync/G-Sync/cache; Gamescope options | RTX HDR, Smooth Motion, Windows ReBAR/power/latency/profile export, digital vibrance and global NVIDIA profile editing are unavailable |
 | Game data/notes | Cached RHI game notes, wiki-name override, PCGamingWiki link, generic UE preference | RHI-specific launch fixes, external-store URLs, Luma TAA recipes and arbitrary server-side Engine.ini templates are not automatically applied |
-| Restore and diagnostics | Verified pre-operation snapshots, owned original DLL blobs, journaled config edits, failed-job rollback, live Activity | Hardware/runtime checks and crash recovery after system power loss still need broader testing |
+| Restore and diagnostics | Verified pre-operation snapshots, owned original DLL blobs, journaled config edits, signal-aware failed-job rollback, strict recovery metadata reads, live Activity | Hardware/runtime checks and crash recovery after system power loss still need broader testing |
+
+Current maintenance also isolates optional update transactions, migrates library
+identities and profiles, preserves configuration encoding, and reduces repeated
+UI work. See [the implementation record](MAINTENANCE_2026-10-18.md).
+
+Custom upscalers now have a separate checkable Installation dropdown for Cyboman
+Exact/Lossy/older Lossy2/Lite and prepared local HelixSR FSR4/NGX variants. It
+requires a capable installed upstream nightly, copies only selected DLLs into
+independently owned custom folders, preserves direct installs and supports
+explicit pruning/removal. This initial adapter targets x64 DX12; archive/export
+checks do not establish Wine/gameplay compatibility. See README for source and
+hardware selection, the 2026-10-29 retrained Lossy changes and upstream caveats.
 
 ## Validation and rollout
 
 The stable 0.2.0 source was backed up before work. Original `~/OptiDX` is unchanged. New features live in independent desktop adapters, preserving the existing script backend.
 
-94 automated tests cover existing component combinations plus archive containment, architecture matching, ownership conflicts, original-file checksums, failed-write/job rollback, external Engine.ini restoration, shader dependencies, DLL swaps, Linux environment encoding, KDE HDR lifetime, config edit races, and launcher discovery. Real local ReShade 6.7.3, RenoDX and DLSS 310.7.0 packages were installed/removed in temporary folders. Existing games were only inspected.
+243 automated tests cover existing component combinations plus archive containment, architecture matching, ownership conflicts, original-file checksums, failed-write/job rollback, external Engine.ini restoration, shader dependencies, DLL swaps, Linux environment encoding, KDE HDR lifetime, config edit races, and launcher discovery. Real local ReShade 6.7.3, RenoDX and DLSS 310.7.0 packages were installed/removed in temporary folders. Existing games were only inspected.
 
 Shell DNS/networking is blocked here, so live downloads for new components are not verified. The AppImage is tested locally with bundled Python/Qt/PyYAML. Game compatibility, other distributions, hardware-dependent controls, Vulkan injection and neural rendering need separate validation. This is a substantial parity expansion, not full RHI equivalence.
 

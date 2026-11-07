@@ -1,3 +1,62 @@
+# OptiDX Desktop 0.3.6 — prepared 2026-11-07
+
+- Changing the selected executable folder keeps separate recovery originals for
+  each folder. Updating preserves externally saved OptiScaler.ini settings.
+
+- Recognize current OptiScaler CustomProviders nightlies despite changed diagnostic
+  formatting, fixing a false unsupported-build error after a successful update.
+
+- Legacy OptiScaler upgrades recognize package files beneath recorded vendor/license
+  directories, avoiding spurious replacement prompts. Retain prior bytes for
+  recovery and preserve independently owned AMD/HelixSR DLLs and custom variants.
+
+- Updates recognize verified moved installations and rebind their install marker
+  and retained recovery scopes. Preserve originals, journal the relocation and
+  retain rejection of ambiguous copies or altered ownership data. Legacy
+  component/Cyboman provenance is supported without requiring a modern asset ledger.
+
+- Prevent selecting older Lossy2 with current Cyboman downloads. Saved obsolete
+  selections show corrective guidance; older pins/local archives remain supported.
+
+- Added: checkable custom-upscaler picker with selected-only Cyboman
+  Exact/Lossy/older Lossy2/Lite and prepared HelixSR FSR4/DLSS deployment. Added an
+  official upstream nightly source, hardware-specific archives, release pins,
+  independent updates/removal and warning retention. Existing direct installs
+  stay intact; custom deployment requires a capable x64 DX12 OptiScaler build.
+
+- Maintenance: retain TLS verification/digests, refuse corrupt recovery
+  records, flush durable writes, fix quirks parsing and ambiguous prefix matching,
+  preserve config encoding, redact diagnostic secrets, and roll back graceful
+  worker cancellation.
+- Launch setup failures are reported without blocking the game command. Managed
+  HDR sessions share each display and restore its original state after the last
+  user exits. Optional update failures no longer undo other successful groups.
+- Debounce drafts, cache UI inspection, discover DLLs in the background, batch
+  shader installs, extract solid archives once, and bound logs/completed history.
+  Snapshot payloads share checksum-addressed storage; recovery evidence is retained.
+- Adopt stable Steam/Heroic IDs with existing-record migration, version profile
+  schemas, replace mutable game/tuple job plumbing, and introduce scoped backend
+  contexts, page-owned draft controls, semantic theme tokens and formatting/lint CI.
+
+- Follow-up recovery fixes retain originals first replaced by later operations,
+  restore original proxies when pruning ReShade, and keep Cyboman DLL ownership
+  consistent across OptiScaler updates. Verified legacy records migrate on use.
+- Recovery fixes: preflight complete OptiScaler payloads, preserve unmanaged
+  originals and existing INI settings, validate DLL architecture, restore direct
+  HelixSR originals during pruning, and roll back incomplete uninstallations.
+- Fixed DXVK and standalone ReShade update dispatch and manual launching from source.
+- Operation snapshot history is now opt-in (off by default), with a configurable
+  per-game limit and explicit cleanup of completed history. Temporary rollback and
+  verified original-file recovery remain automatic. Interrupted/manual-recovery
+  snapshots are protected. Existing history is not deleted merely by disabling retention.
+
+**Validation:** See the local release validation record in
+[project context](docs/PROJECT_CONTEXT.md). Deployment checks use temporary game
+folders; gameplay, live downloads and cross-distribution compatibility are not
+established. This release is prepared locally and has not been published.
+
+---
+
 # OptiDX Desktop 0.3.5
 
 - HelixSR now directly replaces `OptiScaler/amd_fidelityfx_upscaler_dx12.dll`.
@@ -58,7 +117,7 @@
   newer unrecorded files.
 - Remember workspace layout and navigation, add library sorting and Ctrl+F/S/R.
 
-**Validation:** 165 automated tests cover component selection, standalone HelixSR
+**Validation:** 207 automated tests cover component selection, standalone HelixSR
 DLL deployment, drafts, queues, ownership and recovery in temporary game folders.
 Source and bundled-Python tests, fresh UI previews, checksum, FUSE-free startup
 and backend help are checked for the local build. These checks do not establish

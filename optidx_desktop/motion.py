@@ -1,12 +1,13 @@
 """Short, interruptible UI transitions that never delay an action."""
+
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QObject
 from PySide6.QtWidgets import QGraphicsOpacityEffect
 
 
 def reduced_motion(widget):
     window = widget.window()
-    settings = getattr(window, 'service_settings', {})
-    return settings.get('reduce_motion', False)
+    settings = getattr(window, "service_settings", {})
+    return settings.get("reduce_motion", False)
 
 
 class SectionMotion(QObject):
@@ -14,13 +15,14 @@ class SectionMotion(QObject):
         super().__init__(body)
         self.body = body
         self.toggle = toggle
-        self.animation = QPropertyAnimation(body, b'maximumHeight', self)
+        self.animation = QPropertyAnimation(body, b"maximumHeight", self)
         self.animation.setDuration(140)
         self.animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.animation.finished.connect(self.finish)
 
     def change(self, opened):
         from PySide6.QtCore import Qt
+
         self.toggle.setArrowType(Qt.ArrowType.DownArrow if opened else Qt.ArrowType.RightArrow)
         start = self.body.height() if self.body.isVisible() else 0
         self.animation.stop()
@@ -68,7 +70,7 @@ class PageMotion(QObject):
         self.page = page
         self.effect = QGraphicsOpacityEffect(page)
         page.setGraphicsEffect(self.effect)
-        self.animation = QPropertyAnimation(self.effect, b'opacity', self)
+        self.animation = QPropertyAnimation(self.effect, b"opacity", self)
         self.animation.setDuration(110)
         self.animation.setStartValue(0.78)
         self.animation.setEndValue(1.0)

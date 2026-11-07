@@ -4,9 +4,17 @@ import struct
 
 from .storage import read_json
 
-API_IMPORTS = {"d3d8.dll": "DX8", "d3d9.dll": "DX9", "d3d10.dll": "DX10",
-               "d3d10_1.dll": "DX10", "d3d11.dll": "DX11", "d3d12.dll": "DX12",
-               "dxgi.dll": "DXGI", "vulkan-1.dll": "Vulkan", "opengl32.dll": "OpenGL"}
+API_IMPORTS = {
+    "d3d8.dll": "DX8",
+    "d3d9.dll": "DX9",
+    "d3d10.dll": "DX10",
+    "d3d10_1.dll": "DX10",
+    "d3d11.dll": "DX11",
+    "d3d12.dll": "DX12",
+    "dxgi.dll": "DXGI",
+    "vulkan-1.dll": "Vulkan",
+    "opengl32.dll": "OpenGL",
+}
 DIRECTX_INPUTS = {"DX11", "DX12", "DXGI"}
 
 
@@ -14,31 +22,39 @@ def pe_info(path):
     """Read PE headers/imports; do not execute the binary or infer APIs from arbitrary strings."""
     info = {"bits": None, "machine": None, "apis": [], "imports": []}
     try:
-        with open(path, "rb") as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data:
+        with (
+            open(path, "rb") as stream,
+            mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data,
+        ):
             if data[:2] != b"MZ":
                 return info
-            pe = struct.unpack_from("<I", data, 0x3c)[0]
-            if data[pe:pe + 4] != b"PE\0\0":
+            pe = struct.unpack_from("<I", data, 0x3C)[0]
+            if data[pe : pe + 4] != b"PE\0\0":
                 return info
             machine, sections = struct.unpack_from("<HH", data, pe + 4)
             opt_size = struct.unpack_from("<H", data, pe + 20)[0]
             optional = pe + 24
             magic = struct.unpack_from("<H", data, optional)[0]
-            if magic not in (0x10b, 0x20b):
+            if magic not in (0x10B, 0x20B):
                 return info
-            if (opt_size < (112 if magic == 0x20b else 96) or not 1 <= sections <= 96 or
-                    optional + opt_size + sections * 40 > len(data) or
-                    (machine == 0x14c and magic != 0x10b) or
-                    (machine in {0x8664, 0xaa64} and magic != 0x20b)):
+            if (
+                opt_size < (112 if magic == 0x20B else 96)
+                or not 1 <= sections <= 96
+                or optional + opt_size + sections * 40 > len(data)
+                or (machine == 0x14C and magic != 0x10B)
+                or (machine in {0x8664, 0xAA64} and magic != 0x20B)
+            ):
                 return info
             info["machine"] = machine
-            info["bits"] = {0x8664: 64, 0x14c: 32, 0xaa64: 64}.get(machine)
-            directories = optional + (112 if magic == 0x20b else 96)
+            info["bits"] = {0x8664: 64, 0x14C: 32, 0xAA64: 64}.get(machine)
+            directories = optional + (112 if magic == 0x20B else 96)
             import_rva = struct.unpack_from("<I", data, directories + 8)[0]
             table = optional + opt_size
             mapping = []
             for n in range(min(sections, 96)):
-                virtual_size, rva, size, offset = struct.unpack_from("<IIII", data, table + n * 40 + 8)
+                virtual_size, rva, size, offset = struct.unpack_from(
+                    "<IIII", data, table + n * 40 + 8
+                )
                 mapping.append((rva, max(virtual_size, size), offset, size))
 
             def offset_for(address):
@@ -48,12 +64,19 @@ def pe_info(path):
                 return None
 
             descriptors = offset_for(import_rva) if import_rva else None
+
             def add_import(address):
                 offset = offset_for(address)
                 if offset is not None:
-                    name = data[offset:offset + 256].split(b"\0", 1)[0].decode("ascii", errors="ignore").lower()
+                    name = (
+                        data[offset : offset + 256]
+                        .split(b"\0", 1)[0]
+                        .decode("ascii", errors="ignore")
+                        .lower()
+                    )
                     if name and name not in info["imports"]:
                         info["imports"].append(name)
+
             if descriptors is not None:
                 for n in range(512):
                     descriptor = struct.unpack_from("<IIIII", data, descriptors + n * 20)
@@ -66,8 +89,11 @@ def pe_info(path):
                 delay_rva = struct.unpack_from("<I", data, directories + 13 * 8)[0]
                 delayed = offset_for(delay_rva) if delay_rva else None
                 if delayed is not None:
-                    image_base = struct.unpack_from("<Q" if magic == 0x20b else "<I", data,
-                                                    optional + (24 if magic == 0x20b else 28))[0]
+                    image_base = struct.unpack_from(
+                        "<Q" if magic == 0x20B else "<I",
+                        data,
+                        optional + (24 if magic == 0x20B else 28),
+                    )[0]
                     for n in range(512):
                         descriptor = struct.unpack_from("<IIIIIIII", data, delayed + n * 32)
                         if not any(descriptor):
@@ -82,7 +108,7 @@ def pe_info(path):
 
 def compatible_binary(path, bits):
     """Bitness alone cannot distinguish x64 from ARM64 Windows payloads."""
-    return bits in (32, 64) and pe_info(path)["machine"] == {32: 0x14c, 64: 0x8664}[bits]
+    return bits in (32, 64) and pe_info(path)["machine"] == {32: 0x14C, 64: 0x8664}[bits]
 
 
 def contained(root, relative):
@@ -112,10 +138,16 @@ def manifest_paths(root):
 
 def inspect_game(game):
     root = game.target
-    info = pe_info(game.executable) if game.executable else {"bits": None, "apis": [], "imports": []}
+    info = (
+        pe_info(game.executable) if game.executable else {"bits": None, "apis": [], "imports": []}
+    )
     ancestors = [root] + list(root.parents)[:3]
     low = str(root).lower().replace("\\", "/")
-    engine = "Unreal" if "/binaries/" in low or any((p / "Engine").is_dir() for p in ancestors) else "Unknown"
+    engine = (
+        "Unreal"
+        if "/binaries/" in low or any((p / "Engine").is_dir() for p in ancestors)
+        else "Unknown"
+    )
     if (root / "UnityPlayer.dll").exists() or (root / "GameAssembly.dll").exists():
         engine = "Unity"
     if (root / "re_chunk_000.pak").exists():
@@ -131,10 +163,20 @@ def inspect_game(game):
         "OptiScaler": (root / "OptiScaler.ini").is_file(),
         "ReShade": has({"d3d12-ReShade64.dll", "ReShade64.dll", "ReShade32.dll"}),
         "RenoDX": any(n.lower().startswith("renodx") and ".addon" in n.lower() for n in files),
-        "Luma": any(("luma" in n.lower() and ".addon" in n.lower()) or n.lower().endswith(".addon") for n in files),
-        "HelixSR": ((root / "OptiScaler/.optidx-helixsr.json").is_file() and (root / "OptiScaler/amd_fidelityfx_upscaler_dx12.dll").is_file()) or any((root / "OptiScaler/HelixSR" / name).is_file()
-                       for name in ["helixsr.dll", "amd_fidelityfx_dx12.dll"]),
-        "AMD FSR": (root / "OptiScaler/amd_fidelityfx_upscaler_dx12.dll").is_file() and not (root / "OptiScaler/.optidx-helixsr.json").is_file(),
+        "Luma": any(
+            ("luma" in n.lower() and ".addon" in n.lower()) or n.lower().endswith(".addon")
+            for n in files
+        ),
+        "HelixSR": (
+            (root / "OptiScaler/.optidx-helixsr.json").is_file()
+            and (root / "OptiScaler/amd_fidelityfx_upscaler_dx12.dll").is_file()
+        )
+        or any(
+            (root / "OptiScaler/HelixSR" / name).is_file()
+            for name in ["helixsr.dll", "amd_fidelityfx_dx12.dll"]
+        ),
+        "AMD FSR": (root / "OptiScaler/amd_fidelityfx_upscaler_dx12.dll").is_file()
+        and not (root / "OptiScaler/.optidx-helixsr.json").is_file(),
         "DLSS Enabler": (root / "OptiScaler/dlss-enabler-headless.dll").is_file(),
     }
     hdr = read_json(root / ".optidx-ue-hdr.json", {})
@@ -146,53 +188,134 @@ def inspect_game(game):
                     components[name] = True
             except ValueError:
                 pass
-    return {**info, "engine": engine, "components": components, "managed": managed,
-            "installed": bool(managed), "hdr": hdr.get("status", "Unmanaged"),
-            "manifest_error": manifest_error, "available": game.available,
-            "target": str(root), "executable_exists": bool(game.executable and Path(game.executable).is_file())}
+    return {
+        **info,
+        "engine": engine,
+        "components": components,
+        "managed": managed,
+        "installed": bool(managed),
+        "hdr": hdr.get("status", "Unmanaged"),
+        "manifest_error": manifest_error,
+        "available": game.available,
+        "target": str(root),
+        "executable_exists": bool(game.executable and Path(game.executable).is_file()),
+    }
 
 
 def foreign_dlls(game):
     """Identify conflicting proxies without guessing from filenames alone."""
     from .assets import state
+
     try:
-        tracked=set(manifest_paths(game.target))
-    except (ValueError,OSError):
+        tracked = set(manifest_paths(game.target))
+    except (ValueError, OSError):
         return []
-    for item in state(game.target)['groups'].values():tracked.update(item['files'])
-    records=[]
-    for name in ['dxgi.dll','d3d9.dll','opengl32.dll','dinput8.dll','winmm.dll','version.dll','winhttp.dll']:
-        path=game.target/name
-        if not path.is_file() or name in tracked:continue
-        with path.open('rb') as stream:data=stream.read(8*1024*1024)
-        identity=next((label for label in ['OptiScaler','ReShade','DXVK','Special K','ENB','REFramework']
-                       if label.encode() in data or label.encode('utf-16-le') in data),'Unknown DLL')
-        records.append({'path':name,'identity':identity,'symlink':path.is_symlink()})
+    for item in state(game.target)["groups"].values():
+        tracked.update(item["files"])
+    records = []
+    for name in [
+        "dxgi.dll",
+        "d3d9.dll",
+        "opengl32.dll",
+        "dinput8.dll",
+        "winmm.dll",
+        "version.dll",
+        "winhttp.dll",
+    ]:
+        path = game.target / name
+        if not path.is_file() or name in tracked:
+            continue
+        with path.open("rb") as stream:
+            data = stream.read(8 * 1024 * 1024)
+        identity = next(
+            (
+                label
+                for label in ["OptiScaler", "ReShade", "DXVK", "Special K", "ENB", "REFramework"]
+                if label.encode() in data or label.encode("utf-16-le") in data
+            ),
+            "Unknown DLL",
+        )
+        records.append({"path": name, "identity": identity, "symlink": path.is_symlink()})
     return records
 
 
 def unreal_version(game):
-    root=Path(game.root)
-    candidates=[root/'Engine/Build/Build.version',root/'Build.version']
+    root = Path(game.root)
+    candidates = [root / "Engine/Build/Build.version", root / "Build.version"]
     for path in candidates:
-        data=read_json(path,{})
-        if isinstance(data.get('MajorVersion'),int) and isinstance(data.get('MinorVersion'),int):
-            return str(data['MajorVersion'])+'.'+str(data['MinorVersion'])
+        data = read_json(path, {})
+        if isinstance(data.get("MajorVersion"), int) and isinstance(data.get("MinorVersion"), int):
+            return str(data["MajorVersion"]) + "." + str(data["MinorVersion"])
     try:
         import re
-        with Path(game.executable).open('rb') as stream, mmap.mmap(stream.fileno(),0,access=mmap.ACCESS_READ) as data:
-            match=re.search(rb'\+\+UE[45]\+Release-([45]\.\d+)',data)
-            if match:return match[1].decode()
-    except (OSError,ValueError):pass
-    return ''
+
+        with (
+            Path(game.executable).open("rb") as stream,
+            mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data,
+        ):
+            match = re.search(rb"\+\+UE[45]\+Release-([45]\.\d+)", data)
+            if match:
+                return match[1].decode()
+    except (OSError, ValueError):
+        pass
+    return ""
 
 
 def file_version(path):
     """Read the Windows fixed-file-info version; never load a DLL."""
     try:
-        with Path(path).open('rb') as stream, mmap.mmap(stream.fileno(),0,access=mmap.ACCESS_READ) as data:
-            offset=data.find(b'\xbd\x04\xef\xfe\x00\x00\x01\x00')
-            if offset < 0:return ''
-            major_minor, build_revision=struct.unpack_from('<II',data,offset+8)
-            return '.'.join(str(n) for n in [major_minor>>16,major_minor&0xffff,build_revision>>16,build_revision&0xffff])
-    except (OSError,ValueError,struct.error):return ''
+        with (
+            Path(path).open("rb") as stream,
+            mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data,
+        ):
+            offset = data.find(b"\xbd\x04\xef\xfe\x00\x00\x01\x00")
+            if offset < 0:
+                return ""
+            major_minor, build_revision = struct.unpack_from("<II", data, offset + 8)
+            return ".".join(
+                str(n)
+                for n in [
+                    major_minor >> 16,
+                    major_minor & 0xFFFF,
+                    build_revision >> 16,
+                    build_revision & 0xFFFF,
+                ]
+            )
+    except (OSError, ValueError, struct.error):
+        return ""
+
+
+class InspectionCache:
+    """Short-lived UI cache; workers always inspect directly after mutations."""
+
+    def __init__(self):
+        self.values = {}
+
+    def clear(self):
+        self.values.clear()
+
+    def inspect(self, game):
+        import time
+        import copy
+
+        def stat(path):
+            try:
+                value = Path(path).stat()
+                return value.st_mtime_ns, value.st_ctime_ns, value.st_size
+            except OSError:
+                return None
+
+        paths = [
+            game.executable,
+            game.target,
+            game.target / "OptiScaler",
+            game.target / ".optidx-components.json",
+            game.target / ".optidx-ue-hdr.json",
+            game.target / ".optidx-files",
+            game.target / "OptiScaler/.optidx-helixsr.json",
+        ]
+        key = (game, tuple(stat(path) for path in paths))
+        now = time.monotonic()
+        if key not in self.values or now - self.values[key][0] > 0.5:
+            self.values = {key: (now, inspect_game(game))}
+        return copy.deepcopy(self.values[key][1])

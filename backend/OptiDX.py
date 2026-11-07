@@ -37,6 +37,11 @@ import time
 import zipfile
 from pathlib import Path
 
+# The Desktop backend also serves absolute-path source wrappers.
+_desktop_root = str(Path(__file__).resolve().parents[1])
+if _desktop_root not in sys.path:
+    sys.path.insert(0, _desktop_root)
+
 # --------------------------------------------------------------------------- #
 # GLOBALS
 # --------------------------------------------------------------------------- #
@@ -54,14 +59,26 @@ UE_HDR_VALUES = {
 }
 UE_RENDERER_VALUES = {"r.LUT.UpdateEveryFrame": "1"}
 # Native HDR processing path; resource-upgrade settings remain user-editable.
-UE_RENODX_VALUES = {"Set_Path": "0", **{
-    "Upgrade_" + name: "0" for name in (
-        "R8G8B8A8_TYPELESS", "B8G8R8A8_TYPELESS", "R8G8B8A8_UNORM",
-        "B8G8R8A8_UNORM", "R8G8B8A8_SNORM", "R8G8B8A8_UNORM_SRGB",
-        "B8G8R8A8_UNORM_SRGB", "R10G10B10A2_TYPELESS", "R10G10B10A2_UNORM",
-        "B10G10R10A2_UNORM", "R11G11B10_FLOAT", "R16G16B16A16_TYPELESS",
-    )
-}}
+UE_RENODX_VALUES = {
+    "Set_Path": "0",
+    **{
+        "Upgrade_" + name: "0"
+        for name in (
+            "R8G8B8A8_TYPELESS",
+            "B8G8R8A8_TYPELESS",
+            "R8G8B8A8_UNORM",
+            "B8G8R8A8_UNORM",
+            "R8G8B8A8_SNORM",
+            "R8G8B8A8_UNORM_SRGB",
+            "B8G8R8A8_UNORM_SRGB",
+            "R10G10B10A2_TYPELESS",
+            "R10G10B10A2_UNORM",
+            "B10G10R10A2_UNORM",
+            "R11G11B10_FLOAT",
+            "R16G16B16A16_TYPELESS",
+        )
+    },
+}
 
 REPO_OPTISCALER = "Cha1N1/OptiScaler"
 REPO_LUMA = "Filoppi/Luma-Framework"
@@ -82,7 +99,9 @@ RENODX_UNITY_FALLBACK = "https://notvoosh.github.io/renodx-unity/renodx-unityeng
 RESHADE_URL = "https://reshade.me/downloads/ReShade_Setup_Addon.exe"
 RESHADE_DLL_NAME = "d3d12-ReShade64.dll"
 RESHADE_LEGACY_DLL_NAME = "ReShade64.dll"
-D3DCOMPILER_URL = "https://raw.githubusercontent.com/Joshua-Ashton/d3dcompiler_47/master/d3dcompiler_47.dll"
+D3DCOMPILER_URL = (
+    "https://raw.githubusercontent.com/Joshua-Ashton/d3dcompiler_47/master/d3dcompiler_47.dll"
+)
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache")) / "optidx"
@@ -97,17 +116,30 @@ LOG_FILE = None
 LOG_BUFFER = []
 
 MIN_SCORE = 700
-MIRROR_BLOCKLIST = {"generic", "devkit", "fpslimiter", "_univ", "ue-extended", "unityengine", "unity", "fe"}
+MIRROR_BLOCKLIST = {
+    "generic",
+    "devkit",
+    "fpslimiter",
+    "_univ",
+    "ue-extended",
+    "unityengine",
+    "unity",
+    "fe",
+}
 
 UE_IGNORE_REGEX = re.compile(
     r"crashpad|easyanticheat|crashreportclient|unrealcefsubprocess|unreallightmass|"
     r"epicwebhelper|shadercompileworker|dxcheck|unitycrashhandler|dxsetup|vcredist|"
-    r"dotnetfx|oalinst|touchup", re.I)
+    r"dotnetfx|oalinst|touchup",
+    re.I,
+)
 SYSTEM_DIR_REGEX = re.compile(
     r"^(binaries|win64|win32|wingdk|engine|contents|game|games|app|bin|data|test|tmp|"
     r"home|drive_c|steamapps|common|mnt|media|storage|users|public|desktop|documents|"
     r"downloads|steamlibrary|steam|gog games|galaxy|epic games|ubisoft.*|origin games|"
-    r"ea games|xboxgames|program files.*|[a-z]:)$", re.I)
+    r"ea games|xboxgames|program files.*|[a-z]:)$",
+    re.I,
+)
 
 GAME_EXE = GAME_DIR = GAME_NAME = GAME_KEY = GAME_DISPLAY = ""
 LAUNCHER_TITLE = STEAM_APPID = STEAM_STORE_TITLE = ""
@@ -139,7 +171,9 @@ QUIRK_SKIP_DLSS_ENABLER = False
 QUIRK_EXTRA_DLL_COPIES = ""
 QUIRKS_MATCHED = ""
 
-USER_QUIRKS_CONF = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")) / "optidx" / "quirks.conf"
+USER_QUIRKS_CONF = (
+    Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")) / "optidx" / "quirks.conf"
+)
 
 # Built-in Game Quirks database (key: norm()'d title -> semicolon-delimited kv pairs)
 GAME_QUIRKS = {
@@ -150,27 +184,45 @@ GAME_QUIRKS = {
     "atomicrops": "skip_reshade=true",
     "dysonsphereprogram": "skip_reshade=true",
     "minecraft": "skip_reshade=true",
-    "immortalsofaveum": "optiscaler_dll=d3d12.dll",                    # bypasses signature verification
-    "deadoralive6lastround": "optiscaler_dll=d3d12.dll",               # only d3d12.dll or version.dll work, all else crashes
-    "marvelsmidnightsuns": "optiscaler_dll=d3d12.dll",                 # anti-cheat/anti-tamper blocks default naming
-    "asterigoscurseofthestars": "optiscaler_dll=d3d12.dll",            # required for DLSS on Nvidia, else crash
-    "nevernesstoeverness": "optiscaler_dll=d3d12.dll",                 # (or version.dll - wiki lists both)
-    "zenlesszonezero": "optiscaler_dll=d3d12.dll",                     # required, plus needs -use-d3d12 launch arg
-    "grandtheftautoiiidefinitiveedition": "optiscaler_dll=d3d12.dll",        # "may be required" + -dx12 launch opt
-    "grandtheftautosanandreasdefinitiveedition": "optiscaler_dll=d3d12.dll", # same caveats as GTA3 DE
-    "grandtheftautovicecitydefinitiveedition": "optiscaler_dll=d3d12.dll",   # same caveats as GTA3 DE
-    "monsterhunterrise": "optiscaler_dll=d3d12.dll",                         # wiki says "optimal", not strictly required
-    "neverforspeedunbound": "optiscaler_dll=d3d12.dll",                      # Linux-only (dxgi.dll on Windows)
+    "immortalsofaveum": "optiscaler_dll=d3d12.dll",  # bypasses signature verification
+    "deadoralive6lastround": "optiscaler_dll=d3d12.dll",  # only d3d12.dll or version.dll work, all else crashes
+    "marvelsmidnightsuns": "optiscaler_dll=d3d12.dll",  # anti-cheat/anti-tamper blocks default naming
+    "asterigoscurseofthestars": "optiscaler_dll=d3d12.dll",  # required for DLSS on Nvidia, else crash
+    "nevernesstoeverness": "optiscaler_dll=d3d12.dll",  # (or version.dll - wiki lists both)
+    "zenlesszonezero": "optiscaler_dll=d3d12.dll",  # required, plus needs -use-d3d12 launch arg
+    "grandtheftautoiiidefinitiveedition": "optiscaler_dll=d3d12.dll",  # "may be required" + -dx12 launch opt
+    "grandtheftautosanandreasdefinitiveedition": "optiscaler_dll=d3d12.dll",  # same caveats as GTA3 DE
+    "grandtheftautovicecitydefinitiveedition": "optiscaler_dll=d3d12.dll",  # same caveats as GTA3 DE
+    "monsterhunterrise": "optiscaler_dll=d3d12.dll",  # wiki says "optimal", not strictly required
+    "neverforspeedunbound": "optiscaler_dll=d3d12.dll",  # Linux-only (dxgi.dll on Windows)
 }
 
-C = dict(INFO='\033[36m', OK='\033[32m', WARN='\033[33m', ERR='\033[31m',
-          BOLD='\033[1m', WHITE='\033[97m', RESET='\033[0m')
+C = dict(
+    INFO="\033[36m",
+    OK="\033[32m",
+    WARN="\033[33m",
+    ERR="\033[31m",
+    BOLD="\033[1m",
+    WHITE="\033[97m",
+    RESET="\033[0m",
+)
 
-ROMAN_MAP = {"i": "1", "ii": "2", "iii": "3", "iv": "4", "v": "5",
-             "vi": "6", "vii": "7", "viii": "8", "ix": "9", "x": "10"}
+ROMAN_MAP = {
+    "i": "1",
+    "ii": "2",
+    "iii": "3",
+    "iv": "4",
+    "v": "5",
+    "vi": "6",
+    "vii": "7",
+    "viii": "8",
+    "ix": "9",
+    "x": "10",
+}
 ###############################################################################
 # LOGGING (stdout is reserved for function return values; logs go to stderr)
 ###############################################################################
+
 
 def _log(msg):
     print(msg, file=sys.stderr)
@@ -220,11 +272,14 @@ def die(msg):
 
 
 def print_banner():
-    _log(f"\n{C['BOLD']}{C['INFO']}"
-         f"  ================================================\n"
-         f"    OptiScaler + RenoDX ( v{SCRIPT_VERSION}, Python )\n"
-         f"    Heroic, Lutris, Steam & UE Mod Engine - Linux\n"
-         f"  ================================================{C['RESET']}")
+    _log(
+        f"\n{C['BOLD']}{C['INFO']}"
+        f"  ================================================\n"
+        f"    OptiScaler + RenoDX ( v{SCRIPT_VERSION}, Python )\n"
+        f"    Heroic, Lutris, Steam & UE Mod Engine - Linux\n"
+        f"  ================================================{C['RESET']}"
+    )
+
 
 ###############################################################################
 # REQUIREMENTS / WORKSPACE
@@ -270,21 +325,22 @@ def check_requirements():
         warn("7z not found - OptiScaler/ReShade extraction will be skipped (install p7zip)")
     return True
 
+
 ###############################################################################
 # NORMALISATION
 ###############################################################################
 
 
 def norm(s):
-    return re.sub(r'[^a-z0-9]', '', (s or '').lower())
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 
 def spaced(s):
-    return re.sub(r'[^a-z0-9]+', ' ', (s or '').lower()).strip()
+    return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
 
 
 def tight(s):
-    return s.replace(' ', '')
+    return s.replace(" ", "")
 
 
 def roman(s):
@@ -299,6 +355,7 @@ def load_json(path):
             return json.load(f)
     except Exception:
         return None
+
 
 ###############################################################################
 # NETWORK
@@ -325,18 +382,37 @@ def clean_env():
 def fetch(url, out, tries=3):
     global FETCH_LAST_CODE
     env = clean_env()
-    insecure = []
     part = out + ".part"
     for i in range(1, tries + 1):
         auth = []
         token = os.environ.get("GITHUB_TOKEN")
         if token and url.startswith("https://api.github.com/"):
             auth = ["-H", f"Authorization: Bearer {token}"]
-        cmd = ["curl", "-fsSL", *insecure, *auth, "--connect-timeout", "15",
-               "--max-time", "600", "-A", UA, url, "-o", part]
+        cmd = [
+            "curl",
+            "-fsSL",
+            "--proto",
+            "=https",
+            "--proto-redir",
+            "=https",
+            *auth,
+            "--connect-timeout",
+            "15",
+            "--speed-limit",
+            "1024",
+            "--speed-time",
+            "60",
+            "-A",
+            UA,
+            url,
+            "-o",
+            part,
+        ]
         completed = False
         try:
-            result = subprocess.run(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            result = subprocess.run(
+                cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
             completed = result.returncode == 0
         except OSError:
             pass
@@ -347,16 +423,29 @@ def fetch(url, out, tries=3):
             os.remove(part)
         except OSError:
             pass
-        # Some Proton/Flatpak sandboxes ship a broken CA bundle; retry unverified.
-        if i == 1 and not insecure:
-            insecure = ["-k"]
-            continue
         if i < tries:
             time.sleep(2)
     try:
-        r = subprocess.run(["curl", "-s", "-k", "-o", "/dev/null", "-w", "%{http_code}",
-                             "-A", UA, "--connect-timeout", "10", "--max-time", "30", url],
-                            env=env, capture_output=True, text=True)
+        r = subprocess.run(
+            [
+                "curl",
+                "-s",
+                "-o",
+                "/dev/null",
+                "-w",
+                "%{http_code}",
+                "-A",
+                UA,
+                "--connect-timeout",
+                "10",
+                "--max-time",
+                "30",
+                url,
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
         FETCH_LAST_CODE = r.stdout.strip()
     except OSError:
         FETCH_LAST_CODE = ""
@@ -368,16 +457,34 @@ def net_diagnose():
     if NET_DIAG_DONE:
         return
     NET_DIAG_DONE = True
-    if not (os.environ.get("LD_LIBRARY_PATH") or os.environ.get("STEAM_RUNTIME")
-            or os.environ.get("STEAM_COMPAT_DATA_PATH")):
+    if not (
+        os.environ.get("LD_LIBRARY_PATH")
+        or os.environ.get("STEAM_RUNTIME")
+        or os.environ.get("STEAM_COMPAT_DATA_PATH")
+    ):
         return
     probe = "https://api.github.com/"
 
     def code(env):
         try:
-            r = subprocess.run(["curl", "-s", "-k", "-o", "/dev/null", "-w", "%{http_code}",
-                                 "--connect-timeout", "8", "--max-time", "15", probe],
-                                env=env, capture_output=True, text=True)
+            r = subprocess.run(
+                [
+                    "curl",
+                    "-s",
+                    "-o",
+                    "/dev/null",
+                    "-w",
+                    "%{http_code}",
+                    "--connect-timeout",
+                    "8",
+                    "--max-time",
+                    "15",
+                    probe,
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
             return r.stdout.strip()
         except OSError:
             return ""
@@ -385,10 +492,16 @@ def net_diagnose():
     dirty = code(os.environ.copy())
     clean = code(clean_env())
     if dirty == "000" and clean not in ("000", ""):
-        info("Network only works with the Steam Runtime library path removed - downloads now use a clean environment")
+        info(
+            "Network only works with the Steam Runtime library path removed - downloads now use a clean environment"
+        )
     elif clean in ("000", ""):
-        warn("No network from inside the Steam Runtime (DNS unreachable, even with a clean library path).")
-        warn("Workaround: run the script once from a terminal in the game folder to fill the cache, then relaunch from Steam:")
+        warn(
+            "No network from inside the Steam Runtime (DNS unreachable, even with a clean library path)."
+        )
+        warn(
+            "Workaround: run the script once from a terminal in the game folder to fill the cache, then relaunch from Steam:"
+        )
         warn(f'    cd "{START_DIR}" && "{os.path.abspath(sys.argv[0])}" --update')
 
 
@@ -406,6 +519,7 @@ def fetch_reason():
         return f"HTTP {c} - upstream server error"
     return f"HTTP {c}"
 
+
 def human_size(n):
     n = float(n)
     for unit in ("B", "K", "M", "G"):
@@ -413,6 +527,26 @@ def human_size(n):
             return f"{n:.0f}{unit}" if unit == "B" else f"{n:.1f}{unit}"
         n /= 1024
     return f"{n:.1f}T"
+
+
+ASSET_DIGESTS = {}
+
+
+def register_asset(asset):
+    url = asset.get("browser_download_url", "")
+    digest = asset.get("digest") or ""
+    if url and digest:
+        if not re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest):
+            raise ValueError("Unsupported asset digest")
+        ASSET_DIGESTS[url] = digest[7:].lower()
+    return url
+
+
+def verify_payload(url, path):
+    expected = ASSET_DIGESTS.get(url)
+    if expected and hashlib.sha256(Path(path).read_bytes()).hexdigest() != expected:
+        raise ValueError("Download SHA-256 mismatch")
+
 
 def fetch_payload(url, output, tries=3):
     """Reuse payloads across games for a day; --update refreshes once per run."""
@@ -437,12 +571,16 @@ def fetch_payload(url, output, tries=3):
                     if os.path.exists(pending):
                         os.remove(pending)
             PAYLOAD_READY[url] = cached
+        verify_payload(url, cached)
         if output is not None:
             shutil.copyfile(cached, output)
         return True
     except OSError:
         # A read-only/full cache must not stop installation.
-        return fetch(url, output, tries) if output is not None else False
+        if output is None or not fetch(url, output, tries):
+            return False
+        verify_payload(url, output)
+        return True
 
 
 def download_file(url, output, tries=3):
@@ -514,6 +652,7 @@ def extract_archive(archive, dest="."):
         return run_ok([SEVENZIP, "x", "-y", archive, f"-o{dest}"])
     return False
 
+
 ###############################################################################
 # TITLE SOURCES
 ###############################################################################
@@ -522,7 +661,7 @@ def extract_archive(archive, dest="."):
 def add_candidate_title(raw):
     if not raw:
         return
-    clean = raw.replace('"', '').replace('-', ' ').replace('_', ' ').strip()
+    clean = raw.replace('"', "").replace("-", " ").replace("_", " ").strip()
     if len(clean) < 3:
         return
     nc = norm(clean)
@@ -550,7 +689,7 @@ def find_steam_library():
 
 
 def steam_install_dir_name():
-    m = re.search(r'steamapps/common/([^/]+)', START_DIR)
+    m = re.search(r"steamapps/common/([^/]+)", START_DIR)
     return m.group(1) if m else None
 
 
@@ -564,7 +703,7 @@ def detect_steam_appid():
     for rel in ("steam_appid.txt", "../steam_appid.txt", "../../steam_appid.txt"):
         if os.path.isfile(rel):
             try:
-                digits = re.sub(r'\D', '', open(rel, errors="ignore").read())
+                digits = re.sub(r"\D", "", open(rel, errors="ignore").read())
             except OSError:
                 digits = ""
             if digits and set(digits) != {"0"}:
@@ -574,12 +713,12 @@ def detect_steam_appid():
     scd = os.environ.get("STEAM_COMPAT_DATA_PATH", "")
     if "/compatdata/" in scd:
         t = scd.split("/compatdata/", 1)[1]
-        aid = re.sub(r'\D', '', t.split("/")[0])
+        aid = re.sub(r"\D", "", t.split("/")[0])
         if aid:
             STEAM_APPID = aid
             return
     for var in ("SteamAppId", "SteamGameId"):
-        v = re.sub(r'\D', '', os.environ.get(var, ""))
+        v = re.sub(r"\D", "", os.environ.get(var, ""))
         if v:
             STEAM_APPID = v
             return
@@ -598,7 +737,7 @@ def detect_steam_appid():
             except OSError:
                 continue
             if f'"{dirname_}"'.lower() in text.lower():
-                STEAM_APPID = re.sub(r'^appmanifest_', '', acf.stem)
+                STEAM_APPID = re.sub(r"^appmanifest_", "", acf.stem)
                 return
 
 
@@ -606,8 +745,11 @@ def detect_steam_store_title():
     global STEAM_STORE_TITLE
     if not STEAM_APPID:
         return
-    cf = cache_fetch(f"https://store.steampowered.com/api/appdetails?appids={STEAM_APPID}&filters=basic",
-                      f"steam_{STEAM_APPID}.json", 604800)
+    cf = cache_fetch(
+        f"https://store.steampowered.com/api/appdetails?appids={STEAM_APPID}&filters=basic",
+        f"steam_{STEAM_APPID}.json",
+        604800,
+    )
     data = load_json(cf)
     try:
         STEAM_STORE_TITLE = data[STEAM_APPID]["data"]["name"]
@@ -649,8 +791,14 @@ def extract_steam_manifest_title():
 
 def detect_heroic_lutris_bottles():
     global LAUNCHER_TITLE
-    for var in ("HEROIC_APP_TITLE", "HEROIC_APP_NAME", "LUTRIS_GAME_NAME",
-                "BOTTLES_GAME_NAME", "BOTTLE_NAME", "LUTRIS_GAME_SLUG"):
+    for var in (
+        "HEROIC_APP_TITLE",
+        "HEROIC_APP_NAME",
+        "LUTRIS_GAME_NAME",
+        "BOTTLES_GAME_NAME",
+        "BOTTLE_NAME",
+        "LUTRIS_GAME_SLUG",
+    ):
         v = os.environ.get(var)
         if v:
             LAUNCHER_TITLE = v
@@ -663,8 +811,10 @@ def detect_heroic_lutris_bottles():
 
     base = os.path.basename(START_DIR)
     cfg_home = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    for h_dir in (os.path.join(cfg_home, "heroic"),
-                  os.path.join(str(Path.home()), ".var/app/com.heroicgameslauncher.hgl/config/heroic")):
+    for h_dir in (
+        os.path.join(cfg_home, "heroic"),
+        os.path.join(str(Path.home()), ".var/app/com.heroicgameslauncher.hgl/config/heroic"),
+    ):
         if not os.path.isdir(h_dir):
             continue
         candidates = [os.path.join(h_dir, "gamelist.json")]
@@ -690,7 +840,7 @@ def _heroic_title_near(text, needle):
     idx = text.find(needle)
     if idx == -1:
         return ""
-    window = text[max(0, idx - 3000):idx]
+    window = text[max(0, idx - 3000) : idx]
     matches = re.findall(r'"title"\s*:\s*"([^"]*)"', window)
     return matches[-1] if matches else ""
 
@@ -708,7 +858,7 @@ def extract_pe_product_name(exe):
         idx = text.find(field)
         if idx == -1:
             continue
-        tail = text[idx + len(field):idx + len(field) + 200]
+        tail = text[idx + len(field) : idx + len(field) + 200]
         m = re.search(r"[A-Za-z0-9 :&!']{3,}", tail)
         if m:
             candidate = m.group(0).strip()
@@ -734,13 +884,15 @@ def detect_exe_bitness(exe):
         return ""
     if val in (0x8664, 0xAA64):
         return "64"
-    if val in (0x014c, 0x01c4):
+    if val in (0x014C, 0x01C4):
         return "32"
     return ""
+
 
 ###############################################################################
 # GAME DETECTION
 ###############################################################################
+
 
 def detect_game():
     global GAME_EXE, GAME_DIR, GAME_NAME, GAME_KEY, GAME_DISPLAY
@@ -767,7 +919,7 @@ def detect_game():
     stop = False
 
     for root, dirs, files in os.walk(START_DIR):
-        rel_depth = root[len(START_DIR):].count(os.sep)
+        rel_depth = root[len(START_DIR) :].count(os.sep)
         if rel_depth >= 7:
             dirs[:] = []
         for fn in files:
@@ -802,11 +954,11 @@ def detect_game():
                 score += 40
             if "/engine/" in lp:
                 score -= 60
-            if re.search(r'launcher.*\.exe$', low):
+            if re.search(r"launcher.*\.exe$", low):
                 score -= 60
             # Anti-cheat launcher shims sit beside the real binary and are
             # often marginally larger, which was enough to win on size alone.
-            if re.search(r'(eac-win64|_eac\.exe|-eac\.exe)$', low):
+            if re.search(r"(eac-win64|_eac\.exe|-eac\.exe)$", low):
                 score -= 120
             # Prefer the plain project binary over decorated siblings.
             score -= len(fn) // 2
@@ -844,8 +996,13 @@ def detect_game():
     except OSError:
         GAME_DIR = START_DIR
 
-    raw_name = re.sub(r'\.[eE][xX][eE]$', '', os.path.basename(best_exe))
-    clean_exe_name = re.sub(r'[-_ ]*(U[0-9]{1,2}|UE[0-9]{1,2}|Win64|Win32|Shipping|Game|Demo|Client|Launcher)', '', raw_name, flags=re.I)
+    raw_name = re.sub(r"\.[eE][xX][eE]$", "", os.path.basename(best_exe))
+    clean_exe_name = re.sub(
+        r"[-_ ]*(U[0-9]{1,2}|UE[0-9]{1,2}|Win64|Win32|Shipping|Game|Demo|Client|Launcher)",
+        "",
+        raw_name,
+        flags=re.I,
+    )
 
     # --- candidate titles, strongest evidence first -------------------------
     add_candidate_title(STEAM_STORE_TITLE)
@@ -887,8 +1044,11 @@ def detect_game():
     GAME_KEY = norm(GAME_NAME)
     GAME_DISPLAY = GAME_NAME
 
-    if (raw_name.endswith("-Win64-Shipping") or raw_name.endswith("-Shipping")
-            or "/Binaries/Win64/" in best_exe.replace(os.sep, "/")):
+    if (
+        raw_name.endswith("-Win64-Shipping")
+        or raw_name.endswith("-Shipping")
+        or "/Binaries/Win64/" in best_exe.replace(os.sep, "/")
+    ):
         GAME_IS_UE = True
         info("Unreal Engine architecture confirmed")
     if not GAME_IS_UNITY and glob.glob(os.path.join(START_DIR, "UnityCrashHandler*.exe")):
@@ -904,9 +1064,11 @@ def detect_game():
     info("Candidate titles: " + " ".join(f"'{t}'" for t in CANDIDATE_TITLES))
     return True
 
+
 ###############################################################################
 # GAME QUIRKS SYSTEM
 ###############################################################################
+
 
 def resolve_game_quirks():
     global QUIRK_OPTISCALER_DLL, QUIRK_SKIP_OPTISCALER, QUIRK_SKIP_RESHADE
@@ -927,9 +1089,10 @@ def resolve_game_quirks():
             line = raw.strip()
             if not line or line.startswith("#"):
                 continue
-            parts = line.split(None, 1)
-            if len(parts) == 2:
-                k, v = norm(parts[0]), parts[1].strip()
+            match = re.fullmatch(r"(\S+?)\s*=\s*(.+)|([^\s=]+)\s+(.+)", line)
+            if match:
+                key, value = match.group(1, 2) if match[1] else match.group(3, 4)
+                k, v = norm(key), value.strip()
                 if k and v:
                     user[k] = v
 
@@ -948,7 +1111,9 @@ def resolve_game_quirks():
     if not quirk_str:
         return
 
-    info(f"Applied game quirk for '{C['BOLD']}{C['WHITE']}{QUIRKS_MATCHED}{C['RESET']}' (from {src}): {quirk_str}")
+    info(
+        f"Applied game quirk for '{C['BOLD']}{C['WHITE']}{QUIRKS_MATCHED}{C['RESET']}' (from {src}): {quirk_str}"
+    )
 
     for kv in quirk_str.split(";"):
         kv = kv.strip()
@@ -969,7 +1134,9 @@ def resolve_game_quirks():
             QUIRK_EXTRA_DLL_COPIES = v
 
     if QUIRK_OPTISCALER_DLL != "dxgi.dll":
-        info(f"Quirk override: OptiScaler proxy DLL set to '{C['BOLD']}{C['WHITE']}{QUIRK_OPTISCALER_DLL}{C['RESET']}'")
+        info(
+            f"Quirk override: OptiScaler proxy DLL set to '{C['BOLD']}{C['WHITE']}{QUIRK_OPTISCALER_DLL}{C['RESET']}'"
+        )
 
 
 def list_all_quirks():
@@ -986,9 +1153,11 @@ def list_all_quirks():
     else:
         _log(f"\n{C['INFO']}User config file not present ({USER_QUIRKS_CONF}){C['RESET']}")
 
+
 ###############################################################################
 # SCORING / MATCHING (replaces match.awk)
 ###############################################################################
+
 
 def score(q, k):
     lq, lk = len(q), len(k)
@@ -1024,7 +1193,7 @@ def score(q, k):
     return 0
 
 
-def match_candidates(candidates, rows, min_score=MIN_SCORE):
+def match_candidates(candidates, rows, min_score=MIN_SCORE, *, fallback_candidates=()):
     """rows: iterable of (k1, k2, k3, k4, name, slug, ext, url, dead)."""
     qks = []
     for c in candidates:
@@ -1056,27 +1225,51 @@ def match_candidates(candidates, rows, min_score=MIN_SCORE):
                     elif s == best and br is not None and br[8] and not row[8]:
                         br = row
         if best >= min_score and br is not None:
-            return {"score": best, "name": br[4], "slug": br[5], "ext": br[6],
-                    "url": br[7], "matched": c, "dead": br[8]}
+            return {
+                "score": best,
+                "name": br[4],
+                "slug": br[5],
+                "ext": br[6],
+                "url": br[7],
+                "matched": c,
+                "dead": br[8],
+            }
 
-    # 2. Bash Parity Fallback: Short-name expansion ("Karma" -> "Karma: The Dark World")
-    for ci, c in enumerate(candidates):
-        sp = spaced(c)
-        q = tight(sp)
-        if len(q) < 3:
+    # Prefix expansion is accepted only when the whole query covers most of a
+    # unique title. Generic folder names must never choose the first wiki row.
+    matches = {}
+    allowed = {tight(spaced(c)) for c in fallback_candidates}
+    for c in candidates:
+        q = tight(spaced(c))
+        if q not in allowed:
+            continue
+        if len(q) < 6:
             continue
         for row in rows:
-            # Check if row key starts with candidate or candidate starts with row key
             k = row[0]
-            if (len(q) >= 4 and k.startswith(q)) or (len(k) >= 4 and q.startswith(k)):
-                return {"score": 750, "name": row[4], "slug": row[5], "ext": row[6],
-                        "url": row[7], "matched": c, "dead": row[8]}
+            if (k.startswith(q) or q.startswith(k)) and min(len(q), len(k)) / max(
+                len(q), len(k)
+            ) >= 0.8:
+                matches[row[5]] = (c, row)
+    if len(matches) == 1:
+        c, row = next(iter(matches.values()))
+        return {
+            "score": 750,
+            "name": row[4],
+            "slug": row[5],
+            "ext": row[6],
+            "url": row[7],
+            "matched": c,
+            "dead": row[8],
+        }
 
     return None
+
 
 ###############################################################################
 # RENODX RESOLUTION
 ###############################################################################
+
 
 def build_renodx_index(md_path):
     rows = []
@@ -1088,17 +1281,19 @@ def build_renodx_index(md_path):
         return rows
 
     for line in lines:
-        if re.match(r'^#+\s', line):
+        if re.match(r"^#+\s", line):
             h = line.lower()
-            if re.search(r'deprecat|legacy|obsolete|retired|archiv|unsupported', h):
+            if re.search(r"deprecat|legacy|obsolete|retired|archiv|unsupported", h):
                 dead = True
-            elif re.match(r'^#[^#]', line):
+            elif re.match(r"^#[^#]", line):
                 dead = False
             continue
-        if not re.match(r'^\s*\|', line):
+        if not re.match(r"^\s*\|", line):
             continue
 
-        m = re.search(r'https?://[^ )|]+\.addon64', line) or re.search(r'https?://[^ )|]+\.addon32', line)
+        m = re.search(r"https?://[^ )|]+\.addon64", line) or re.search(
+            r"https?://[^ )|]+\.addon32", line
+        )
         if not m:
             continue
         url = m.group(0)
@@ -1107,16 +1302,16 @@ def build_renodx_index(md_path):
         if len(cells) < 2:
             continue
         name = cells[1]
-        if re.search(r'\[[^\]]+\]\(', name):
-            name = re.sub(r'^[^\[]*\[', '', name)
-            name = re.sub(r'\].*$', '', name)
-        name = re.sub(r'<[^>]*>', '', name).replace('`', '').strip()
+        if re.search(r"\[[^\]]+\]\(", name):
+            name = re.sub(r"^[^\[]*\[", "", name)
+            name = re.sub(r"\].*$", "", name)
+        name = re.sub(r"<[^>]*>", "", name).replace("`", "").strip()
         if not name:
             continue
 
         file_ = url.rsplit("/", 1)[-1]
         ext = file_.rsplit(".", 1)[-1]
-        slug = re.sub(r'\.addon(64|32)$', '', re.sub(r'^renodx-', '', file_))
+        slug = re.sub(r"\.addon(64|32)$", "", re.sub(r"^renodx-", "", file_))
 
         sp = spaced(name)
         if not sp:
@@ -1178,8 +1373,13 @@ def renodx_mirror_index():
 
     data = load_json(cache_fetch(RENODX_MIRROR_API, "renodx_mirror_raw.json", 21600))
     if not data:
-        data = load_json(cache_fetch("https://api.github.com/repos/marat569/renodx/releases?per_page=3",
-                                      "renodx_mirror_alt.json", 21600))
+        data = load_json(
+            cache_fetch(
+                "https://api.github.com/repos/marat569/renodx/releases?per_page=3",
+                "renodx_mirror_alt.json",
+                21600,
+            )
+        )
     if not data:
         return None
 
@@ -1188,7 +1388,7 @@ def renodx_mirror_index():
     for rel in releases:
         for a in (rel or {}).get("assets", []) or []:
             n = a.get("name", "")
-            m = re.match(r'renodx-(.+)\.addon(64|32)$', n)
+            m = re.match(r"renodx-(.+)\.addon(64|32)$", n)
             if not m:
                 continue
             slug = m.group(1)
@@ -1257,10 +1457,17 @@ def find_renodx_mod():
         return
     info(f"Wiki index: {len(rows)} games")
 
-    hit = match_candidates(CANDIDATE_TITLES, rows, MIN_SCORE)
+    hit = match_candidates(
+        CANDIDATE_TITLES,
+        rows,
+        MIN_SCORE,
+        fallback_candidates=[Path(GAME_EXE).stem] if GAME_EXE else [],
+    )
     if hit:
         if hit["dead"]:
-            warn("The wiki lists this mod under 'Deprecated' (nonfunctional or superseded) - installing anyway")
+            warn(
+                "The wiki lists this mod under 'Deprecated' (nonfunctional or superseded) - installing anyway"
+            )
         label = f"{hit['name']}  [matched '{hit['matched']}', score {hit['score']}]"
         if install_addon(hit["slug"], hit["ext"], hit["url"], label):
             return
@@ -1281,35 +1488,40 @@ def find_renodx_mod():
 
     info("No RenoDX mod matched confidently for this game")
 
+
 ###############################################################################
 # LUMA
 ###############################################################################
+
 
 def find_luma_mod():
     global MOD_FOUND
     if RENODX_ONLY or MOD_FOUND or not CANDIDATE_TITLES:
         return
 
-    data = load_json(cache_fetch(f"https://api.github.com/repos/{REPO_LUMA}/releases/latest",
-                                  "luma_release.json", 3600))
+    data = load_json(
+        cache_fetch(
+            f"https://api.github.com/repos/{REPO_LUMA}/releases/latest", "luma_release.json", 3600
+        )
+    )
     if not data:
         return
 
     seen = {}
     for a in data.get("assets", []) or []:
         n = a.get("name", "")
-        u = a.get("browser_download_url", "")
+        u = register_asset(a)
         if not (n.endswith(".zip") and u):
             continue
         # "-Test" builds and engine-wide bundles are excluded. "-x32" is NOT
         # excluded outright: for some games it's the only build that exists,
         # normalised to the same key as the 64-bit build, used only if
         # nothing else won.
-        if re.search(r'-Test|Generic|Unreal_Engine|Unity_Engine|Graphics_Analyzer', n):
+        if re.search(r"-Test|Generic|Unreal_Engine|Unity_Engine|Graphics_Analyzer", n):
             continue
-        base = re.sub(r'^Luma[-_]', '', re.sub(r'\.zip$', '', n))
+        base = re.sub(r"^Luma[-_]", "", re.sub(r"\.zip$", "", n))
         is32 = base.endswith("-x32")
-        base = re.sub(r'-x32$', '', base)
+        base = re.sub(r"-x32$", "", base)
         k = tight(spaced(base))
         if not k:
             continue
@@ -1321,7 +1533,12 @@ def find_luma_mod():
         return
     rows = [[k, k, "", "", n, "luma", "zip", u, False] for k, (n, u, _bits) in seen.items()]
 
-    hit = match_candidates(CANDIDATE_TITLES, rows, MIN_SCORE)
+    hit = match_candidates(
+        CANDIDATE_TITLES,
+        rows,
+        MIN_SCORE,
+        fallback_candidates=[Path(GAME_EXE).stem] if GAME_EXE else [],
+    )
     if not hit:
         return
 
@@ -1334,7 +1551,7 @@ def find_luma_mod():
     # Luma ships its payload as a plain ".addon" (not just .addon64/.addon32).
     found = False
     for a in Path(luma_dir).rglob("*"):
-        if a.is_file() and re.search(r'\.addon(64|32)?$', a.name):
+        if a.is_file() and re.search(r"\.addon(64|32)?$", a.name):
             try:
                 shutil.copyfile(a, a.name)
                 found = True
@@ -1396,19 +1613,31 @@ def install_engine_fallback():
         warn("Unity fallback download failed")
     warn("No game-specific RenoDX or Luma mod found (OptiScaler & ReShade still installed)")
 
+
 ###############################################################################
 # OPTISCALER / RESHADE / DLSS
 ###############################################################################
 
+
 def optiscaler_urls():
     # Resolve the build from /releases (never /tags - a tag can have no
     # release attached, and /tags is not chronological).
-    data = load_json(cache_fetch(f"https://api.github.com/repos/{REPO_OPTISCALER}/releases/tags/nightly",
-                                  "optiscaler_nightly.json", 3600))
+    data = load_json(
+        cache_fetch(
+            f"https://api.github.com/repos/{REPO_OPTISCALER}/releases/tags/nightly",
+            "optiscaler_nightly.json",
+            3600,
+        )
+    )
     releases = [data] if data else None
     if not releases:
-        data = load_json(cache_fetch(f"https://api.github.com/repos/{REPO_OPTISCALER}/releases?per_page=20",
-                                      "optiscaler_releases.json", 3600))
+        data = load_json(
+            cache_fetch(
+                f"https://api.github.com/repos/{REPO_OPTISCALER}/releases?per_page=20",
+                "optiscaler_releases.json",
+                3600,
+            )
+        )
         releases = data if isinstance(data, list) else ([data] if data else None)
     if not releases:
         warn(f"Could not query OptiScaler releases ({fetch_reason()})")
@@ -1419,14 +1648,14 @@ def optiscaler_urls():
     all7z = []
     for rel in releases:
         for a in (rel or {}).get("assets", []) or []:
-            u = a.get("browser_download_url", "")
+            u = register_asset(a)
             if u.lower().endswith(".7z"):
                 all7z.append(u)
 
     urls = []
     for u in all7z:
         b = u.rsplit("/", 1)[-1].lower()
-        if re.search(r'(debug|symbol|pdb|source|src|sdk)', b):
+        if re.search(r"(debug|symbol|pdb|source|src|sdk)", b):
             continue
         if "optiscaler" in b:
             urls.append(u)
@@ -1462,76 +1691,20 @@ def install_optiscaler():
         warn("Every OptiScaler download failed")
         return
 
-    osc_dir = os.path.join(TMP_DIR, "osc")
-    if not extract_archive(dest, osc_dir):
-        warn("Could not extract OptiScaler (7z missing?)")
-        return
+    # Desktop payload handling preflights every destination and retains originals.
+    from optidx_desktop.core_payload import install_optiscaler_payload
 
-    # Locate the payload root by looking for the DLL or the ini under any
-    # name, so a repackaged archive layout does not silently install nothing.
-    root = osc_dir
-    if not glob.glob(os.path.join(osc_dir, "[Oo]pti[Ss]caler*")):
-        found = None
-        for p in Path(osc_dir).rglob("*"):
-            if p.is_file() and re.match(r'optiscaler.*\.dll$|optiscaler\.ini$', p.name, re.I):
-                found = p
-                break
-        if found:
-            root = str(found.parent)
-
-    try:
-        entries = os.listdir(root)
-    except OSError:
-        entries = []
-    for entry in entries:
-        track(entry)
-        src = os.path.join(root, entry)
-        try:
-            if os.path.isdir(src):
-                shutil.copytree(src, entry, dirs_exist_ok=True)
-            else:
-                shutil.copyfile(src, entry)
-        except OSError:
-            pass
-
-    # Find any extracted optiscaler*.dll
-    matches = [f for f in os.listdir(".") if re.match(r'optiscaler.*\.dll$', f, re.I)]
-    if matches:
-        src_dll = matches[0]
-
-        # Overwrite if FORCE_UPDATE (--update) is set OR if the target DLL doesn't exist yet
-        if FORCE_UPDATE or not os.path.isfile(QUIRK_OPTISCALER_DLL):
-            try:
-                os.replace(src_dll, QUIRK_OPTISCALER_DLL)
-                track(QUIRK_OPTISCALER_DLL)
-            except OSError:
-                try:
-                    shutil.move(src_dll, QUIRK_OPTISCALER_DLL)
-                    track(QUIRK_OPTISCALER_DLL)
-                except OSError:
-                    pass
-        else:
-            # Not an update run and file already exists: clean up the extra extracted DLL
-            try:
-                os.remove(src_dll)
-            except OSError:
-                pass
-    if os.path.isfile(QUIRK_OPTISCALER_DLL):
-        success(f"Installed OptiScaler ({QUIRK_OPTISCALER_DLL})")
-    else:
-        warn("OptiScaler DLL not found after extraction")
-
-    if QUIRK_EXTRA_DLL_COPIES and os.path.isfile(QUIRK_OPTISCALER_DLL):
-        for extra in QUIRK_EXTRA_DLL_COPIES.split(","):
-            extra = extra.strip()
-            if not extra:
-                continue
-            try:
-                shutil.copyfile(QUIRK_OPTISCALER_DLL, extra)
-                track(extra)
-                info(f"Created extra DLL copy: {extra}")
-            except OSError:
-                pass
+    deployed = install_optiscaler_payload(
+        Path.cwd(),
+        dest,
+        int(GAME_BITS or 64),
+        QUIRK_OPTISCALER_DLL,
+        extra_copies=QUIRK_EXTRA_DLL_COPIES,
+        allow_foreign=globals().get("ALLOW_FOREIGN", False),
+    )
+    for name in deployed:
+        track(name)
+    success(f"Installed OptiScaler ({QUIRK_OPTISCALER_DLL})")
 
     if not os.path.isfile("d3dcompiler_47.dll"):
         if fetch_payload(D3DCOMPILER_URL, "d3dcompiler_47.dll", 2):
@@ -1539,28 +1712,15 @@ def install_optiscaler():
         else:
             warn("Optional d3dcompiler_47.dll skipped (system DLL will be used)")
 
-    if os.path.isfile("OptiScaler.ini"):
-        try:
-            text = open("OptiScaler.ini", encoding="utf-8", errors="ignore").read()
-            text = re.sub(r'(?m)^[#]*\s*Dx12Upscaler\s*=.*', 'Dx12Upscaler = ffx', text)
-            text = re.sub(r'(?m)^[#]*\s*FGInput\s*=.*', 'FGInput = dlssg', text)
-            text = re.sub(r'(?m)^[#]*\s*FGOutput\s*=.*', 'FGOutput = xefg', text)
-            text = re.sub(r'(?m)^[#]*\s*FGNvngxReplacement\s*=.*', 'FGNvngxReplacement = auto', text)
-            text = re.sub(r'(?m)^[#]*\s*LoadReshade\s*=.*', 'LoadReshade = true', text)
-            text = re.sub(r'(?m)^[#]*\s*LoadAsiPlugins\s*=.*', 'LoadAsiPlugins = true', text)
-            with open("OptiScaler.ini", "w", encoding="utf-8") as f:
-                f.write(text)
-            success("Configured OptiScaler.ini")
-        except OSError:
-            pass
-
 
 def amd_release_asset():
     """Newest published release carrying the desktop Cyboman archive, resolved once per run."""
     global AMD_RELEASE_ASSET
     if AMD_RELEASE_ASSET is not None:
         return AMD_RELEASE_ASSET or None
-    data = load_json(cache_fetch(AMD_RELEASES_URL, "cyboman_releases.json", 0 if FORCE_UPDATE else 3600))
+    data = load_json(
+        cache_fetch(AMD_RELEASES_URL, "cyboman_releases.json", 0 if FORCE_UPDATE else 3600)
+    )
     releases = data if isinstance(data, list) else []
     for release in releases:
         if release.get("draft") or release.get("prerelease"):
@@ -1587,13 +1747,20 @@ def install_amd_dll():
     pending = None
     try:
         digest = asset.get("digest") or ""
-        if digest.startswith("sha256:") and hashlib.sha256(archive.read_bytes()).hexdigest() != digest[7:]:
+        if (
+            digest.startswith("sha256:")
+            and hashlib.sha256(archive.read_bytes()).hexdigest() != digest[7:]
+        ):
             raise ValueError("Cyboman archive checksum does not match GitHub's asset digest")
         dest = Path("OptiScaler")
         dest.mkdir(exist_ok=True)
         with zipfile.ZipFile(archive) as package:
-            candidates = [m for m in package.infolist() if not m.is_dir() and
-                          m.filename.replace("\\", "/").split("/")[-2:] == ["lossy", AMD_DLL_NAME]]
+            candidates = [
+                m
+                for m in package.infolist()
+                if not m.is_dir()
+                and m.filename.replace("\\", "/").split("/")[-2:] == ["lossy", AMD_DLL_NAME]
+            ]
             if len(candidates) != 1 or not (0 < candidates[0].file_size <= 128 * 1024 * 1024):
                 raise ValueError("Archive must contain exactly one lossy/" + AMD_DLL_NAME)
             fd, pending = tempfile.mkstemp(prefix="cyboman-", dir=dest)
@@ -1605,13 +1772,36 @@ def install_amd_dll():
                     raise ValueError("The lossy archive member is not a Windows DLL")
             dll_hash = hashlib.sha256(dll.read_bytes()).hexdigest()
             os.chmod(dll, 0o644)
-            os.replace(dll, dest / AMD_DLL_NAME)
-            pending = None
+            from optidx_desktop import assets
+            from optidx_desktop.core_payload import reconcile_amd_ownership
+
+            reconcile_amd_ownership(Path.cwd())
+            assets.deploy(
+                Path.cwd(),
+                "backend:amd_fsr",
+                {"OptiScaler/" + AMD_DLL_NAME: dll.read_bytes()},
+                {"kind": "backend", "component": "amd_fsr"},
+                globals().get("ALLOW_FOREIGN", False),
+                transfer_from="backend:optiscaler",
+            )
         track("OptiScaler/" + AMD_DLL_NAME)
         record = dest / ".optidx-amd-release.json"
-        atomic_write(record, (json.dumps({"repository": "zgauthier2000/fsr4-shader-performance-overrides",
-                     "tag": asset["release_tag"], "asset": AMD_ARCHIVE_NAME, "variant": "lossy",
-                     "url": asset["browser_download_url"], "sha256": dll_hash}) + "\n").encode())
+        atomic_write(
+            record,
+            (
+                json.dumps(
+                    {
+                        "repository": "zgauthier2000/fsr4-shader-performance-overrides",
+                        "tag": asset["release_tag"],
+                        "asset": AMD_ARCHIVE_NAME,
+                        "variant": "lossy",
+                        "url": asset["browser_download_url"],
+                        "sha256": dll_hash,
+                    }
+                )
+                + "\n"
+            ).encode(),
+        )
         track(record.as_posix())
         success(f"Installed Cyboman lossy FSR from {asset['release_tag']}")
         return True
@@ -1625,20 +1815,25 @@ def install_amd_dll():
 
 def set_ini_values(text, section, values):
     """Edit one INI section while keeping comments and unrelated settings."""
-    header = re.search(r'(?mi)^\[' + re.escape(section) + r'\][ \t]*$', text)
+    header = re.search(r"(?mi)^\[" + re.escape(section) + r"\][ \t]*$", text)
     if not header:
-        return text.rstrip() + "\n\n[" + section + "]\n" + "".join(
-            f"{key}={value}\n" for key, value in values.items())
-    next_header = re.search(r'(?m)^\[', text[header.end():])
+        return (
+            text.rstrip()
+            + "\n\n["
+            + section
+            + "]\n"
+            + "".join(f"{key}={value}\n" for key, value in values.items())
+        )
+    next_header = re.search(r"(?m)^\[", text[header.end() :])
     end = header.end() + next_header.start() if next_header else len(text)
-    body = text[header.end():end]
+    body = text[header.end() : end]
     for key, value in values.items():
-        pattern = r'(?mi)^[ \t]*' + re.escape(key) + r'[ \t]*=.*$'
+        pattern = r"(?mi)^[ \t]*" + re.escape(key) + r"[ \t]*=.*$"
         if re.search(pattern, body):
             body = re.sub(pattern, lambda _: f"{key}={value}", body)
         else:
             body = body.rstrip() + f"\n{key}={value}\n"
-    return text[:header.end()] + body + text[end:]
+    return text[: header.end()] + body + text[end:]
 
 
 def proton_path(path):
@@ -1652,9 +1847,14 @@ def atomic_write(path, data, mode=None):
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(data)
-        if mode is not None:
-            os.chmod(pending, mode)
+            f.flush()
+            if mode is not None:
+                os.fchmod(f.fileno(), mode)
+            os.fsync(f.fileno())
         os.replace(pending, path)
+        from optidx_desktop.storage import sync_directory
+
+        sync_directory(path.parent)
     finally:
         if os.path.exists(pending):
             os.remove(pending)
@@ -1702,15 +1902,19 @@ def edit_hdr_ini(text, section, values):
             entry = re.match(r"\s*([^;#=]+?)\s*=", line)
             if entry and entry[1].casefold() in keys:
                 remove.add(i)
-    addition = "".join(f"{key}={value}{newline}" for key, value in values.items()
-                       if value is not None)
+    addition = "".join(
+        f"{key}={value}{newline}" for key, value in values.items() if value is not None
+    )
     if not found and addition:
         addition = f"{newline}[{section}]{newline}" + addition
     result = "".join(line for i, line in enumerate(lines[:insert_at]) if i not in remove)
     if addition and result and not result.endswith(("\n", "\r")):
         result += newline
-    return result + addition + "".join(
-        line for i, line in enumerate(lines[insert_at:], insert_at) if i not in remove)
+    return (
+        result
+        + addition
+        + "".join(line for i, line in enumerate(lines[insert_at:], insert_at) if i not in remove)
+    )
 
 
 def ue_hdr_projects(directory):
@@ -1725,7 +1929,9 @@ def ue_hdr_projects(directory):
             break
     for exe in directory.glob("*.exe"):
         if not UE_IGNORE_REGEX.search(exe.name):
-            name = re.sub(r"-(?:Win64|Win32|WinGDK)(?:-Shipping)?$|-Shipping$", "", exe.stem, flags=re.I)
+            name = re.sub(
+                r"-(?:Win64|Win32|WinGDK)(?:-Shipping)?$|-Shipping$", "", exe.stem, flags=re.I
+            )
             if name.casefold() not in ("unrealgame", "ue4game", "ue5game"):
                 names.add(name)
     return sorted(names), roots
@@ -1777,11 +1983,14 @@ def resolve_ue_hdr_config(directory, state):
 
 
 def save_ue_hdr_state(directory, state):
-    atomic_write(Path(directory) / UE_HDR_STATE,
-                 (json.dumps(state, indent=2) + "\n").encode("utf-8"), 0o600)
+    atomic_write(
+        Path(directory) / UE_HDR_STATE, (json.dumps(state, indent=2) + "\n").encode("utf-8"), 0o600
+    )
 
 
-def apply_ue_hdr_ini(directory, state, path, section, values, missing_only=False, readonly=False, extra_sections=None):
+def apply_ue_hdr_ini(
+    directory, state, path, section, values, missing_only=False, readonly=False, extra_sections=None
+):
     path = Path(path)
     record = next((r for r in state["files"] if r["path"] == str(path)), None)
     if record is None:
@@ -1789,24 +1998,46 @@ def apply_ue_hdr_ini(directory, state, path, section, values, missing_only=False
         encoding = hdr_ini_encoding(before)
         text = before.decode(encoding)
         old_values = hdr_ini_values(text, section)
-        changes = {key: value for key, value in values.items()
-                   if not missing_only or key.casefold() not in old_values}
+        changes = {
+            key: value
+            for key, value in values.items()
+            if not missing_only or key.casefold() not in old_values
+        }
         edited = edit_hdr_ini(text, section, changes)
-        sections = [{"section": section, "values": changes,
-                     "old_values": {key: old_values.get(key.casefold()) for key in changes}}]
+        sections = [
+            {
+                "section": section,
+                "values": changes,
+                "old_values": {key: old_values.get(key.casefold()) for key in changes},
+            }
+        ]
         for extra_section, extra_values in (extra_sections or {}).items():
             original_values = hdr_ini_values(text, extra_section)
-            sections.append({"section": extra_section, "values": extra_values,
-                             "old_values": {key: original_values.get(key.casefold()) for key in extra_values}})
+            sections.append(
+                {
+                    "section": extra_section,
+                    "values": extra_values,
+                    "old_values": {
+                        key: original_values.get(key.casefold()) for key in extra_values
+                    },
+                }
+            )
             edited = edit_hdr_ini(edited, extra_section, extra_values)
         after = edited.encode(encoding)
         mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
-        record = {"path": str(path), "existed": path.exists(), "mode": mode,
-                  "encoding": encoding, "sections": sections, "section": section, "values": changes,
-                  "old_values": {key: old_values.get(key.casefold()) for key in changes},
-                  "before": base64.b64encode(before).decode("ascii"),
-                  "after": base64.b64encode(after).decode("ascii"),
-                  "applied_mode": mode & ~0o222 if readonly else mode}
+        record = {
+            "path": str(path),
+            "existed": path.exists(),
+            "mode": mode,
+            "encoding": encoding,
+            "sections": sections,
+            "section": section,
+            "values": changes,
+            "old_values": {key: old_values.get(key.casefold()) for key in changes},
+            "before": base64.b64encode(before).decode("ascii"),
+            "after": base64.b64encode(after).decode("ascii"),
+            "applied_mode": mode & ~0o222 if readonly else mode,
+        }
         state["files"].append(record)
         # Persist undo information before touching the user's config.
         save_ue_hdr_state(directory, state)
@@ -1842,14 +2073,31 @@ def configure_ue_hdr(directory="."):
         engine = resolve_ue_hdr_config(directory, state)
         if engine is None:
             save_ue_hdr_state(directory, state)
-            info("UE HDR setup pending: waiting for a matching game config folder; "
-                 "will retry next launch")
+            info(
+                "UE HDR setup pending: waiting for a matching game config folder; "
+                "will retry next launch"
+            )
             return
-        apply_ue_hdr_ini(directory, state, engine, "SystemSettings", UE_HDR_VALUES, readonly=True,
-                         extra_sections={"/Script/Engine.RendererSettings": UE_RENDERER_VALUES})
-        reshade = next((directory / name for name in ("ReShade.ini", "reshade.ini")
-                        if (directory / name).is_file()), directory / "ReShade.ini")
-        apply_ue_hdr_ini(directory, state, reshade.resolve(), "renodx", UE_RENODX_VALUES, missing_only=True)
+        apply_ue_hdr_ini(
+            directory,
+            state,
+            engine,
+            "SystemSettings",
+            UE_HDR_VALUES,
+            readonly=True,
+            extra_sections={"/Script/Engine.RendererSettings": UE_RENDERER_VALUES},
+        )
+        reshade = next(
+            (
+                directory / name
+                for name in ("ReShade.ini", "reshade.ini")
+                if (directory / name).is_file()
+            ),
+            directory / "ReShade.ini",
+        )
+        apply_ue_hdr_ini(
+            directory, state, reshade.resolve(), "renodx", UE_RENODX_VALUES, missing_only=True
+        )
         state["status"] = "complete"
         save_ue_hdr_state(directory, state)
         success(f"Configured UE-Extended HDR: {engine}")
@@ -1886,9 +2134,11 @@ def restore_ue_hdr(directory):
                 for section_record in record.get("sections", [record]):
                     section = section_record["section"]
                     values = hdr_ini_values(text, section)
-                    undo = {key: section_record["old_values"][key]
-                            for key, value in section_record["values"].items()
-                            if values.get(key.casefold()) == value}
+                    undo = {
+                        key: section_record["old_values"][key]
+                        for key, value in section_record["values"].items()
+                        if values.get(key.casefold()) == value
+                    }
                     text = edit_hdr_ini(text, section, undo)
                 restored = text.encode(record["encoding"])
             atomic_write(path, restored, mode)
@@ -1920,20 +2170,30 @@ def install_helixsr():
     owners = owned_components()
     if marker.is_symlink() or backup.is_symlink():
         raise ValueError("Refusing to replace HelixSR metadata or backup symlinks")
-    state = load_json(marker) if marker.is_file() else {}
+    from optidx_desktop.storage import read_json
+
+    state = read_json(marker, {})
     if marker.is_file() and state.get("layout") != "direct":
         raise ValueError("HelixSR replacement metadata is invalid")
     if not state:
         if backup.exists():
             raise ValueError("An unrecorded HelixSR backup exists; inspect it before installing")
-        state = {"layout": "direct", "previous_owner": next((k for k, paths in owners.items() if target.as_posix() in paths), None)}
+        state = {
+            "layout": "direct",
+            "previous_owner": next(
+                (k for k, paths in owners.items() if target.as_posix() in paths), None
+            ),
+        }
         if target.is_file():
             data = target.read_bytes()
             atomic_write(backup, data, target.stat().st_mode & 0o777)
             state["original_sha256"] = hashlib.sha256(data).hexdigest()
             state["original_mode"] = target.stat().st_mode & 0o777
             track(backup.as_posix())
-    elif state.get("original_sha256") and (not backup.is_file() or hashlib.sha256(backup.read_bytes()).hexdigest() != state["original_sha256"]):
+    elif state.get("original_sha256") and (
+        not backup.is_file()
+        or hashlib.sha256(backup.read_bytes()).hexdigest() != state["original_sha256"]
+    ):
         raise ValueError("HelixSR original DLL backup checksum mismatch")
     track(target.as_posix())
     track(marker.as_posix())
@@ -1957,10 +2217,15 @@ def install_helixsr():
     if ini.is_file():
         text = ini.read_text(encoding="utf-8")
         values = hdr_ini_values(text, "Libraries")
-        changes = {key: "auto" for key in ("FfxDx12Path", "FfxDx12SRPath", "NvngxPath", "NvngxDlssPath")
-                   if "optiscaler/helixsr/" in values.get(key.casefold(), "").replace("\\", "/").casefold()}
+        changes = {
+            key: "auto"
+            for key in ("FfxDx12Path", "FfxDx12SRPath", "NvngxPath", "NvngxDlssPath")
+            if "optiscaler/helixsr/" in values.get(key.casefold(), "").replace("\\", "/").casefold()
+        }
         changes["FfxDx12SRPath"] = proton_path(target)
-        atomic_write(ini, set_ini_values(text, "Libraries", changes).encode(), ini.stat().st_mode & 0o777)
+        atomic_write(
+            ini, set_ini_values(text, "Libraries", changes).encode(), ini.stat().st_mode & 0o777
+        )
     success("Installed standalone HelixSR at " + target.as_posix())
     return True
 
@@ -1973,22 +2238,36 @@ def pick_dlss_asset(data):
     releases = data if isinstance(data, list) else [data]
     for rel in releases:
         for a in (rel or {}).get("assets", []) or []:
-            u = a.get("browser_download_url", "")
+            u = register_asset(a)
             b = u.rsplit("/", 1)[-1].lower()
             if not b.endswith(".zip"):
                 continue
-            if re.search(r'(debug|symbol|pdb|source|src)([._-]|$)', b):
+            if re.search(r"(debug|symbol|pdb|source|src)([._-]|$)", b):
                 continue
             return u
     return None
 
 
 def dlss_enabler_url():
-    url = pick_dlss_asset(load_json(cache_fetch(f"https://api.github.com/repos/{REPO_DLSS}/releases/tags/dlss-enabler",
-                                                 "dlss_enabler.json", 3600)))
+    url = pick_dlss_asset(
+        load_json(
+            cache_fetch(
+                f"https://api.github.com/repos/{REPO_DLSS}/releases/tags/dlss-enabler",
+                "dlss_enabler.json",
+                3600,
+            )
+        )
+    )
     if not url:
-        url = pick_dlss_asset(load_json(cache_fetch(f"https://api.github.com/repos/{REPO_DLSS}/releases?per_page=5",
-                                                     "dlss_enabler_all.json", 3600)))
+        url = pick_dlss_asset(
+            load_json(
+                cache_fetch(
+                    f"https://api.github.com/repos/{REPO_DLSS}/releases?per_page=5",
+                    "dlss_enabler_all.json",
+                    3600,
+                )
+            )
+        )
         if url:
             info("DLSS Enabler: pinned tag unavailable, using newest release")
     if not url:
@@ -2068,7 +2347,7 @@ def migrate_reshade(directory="."):
                         if needle in data:
                             supported = True
                             break
-                        tail = data[-(len(needle) - 1):]
+                        tail = data[-(len(needle) - 1) :]
             except OSError:
                 continue
             if supported:
@@ -2076,8 +2355,10 @@ def migrate_reshade(directory="."):
     except OSError:
         pass
     if not supported:
-        warn("Keeping ReShade64.dll: run OptiDX with --update after installing "
-             "the patched OptiScaler nightly to enable the WGL fix")
+        warn(
+            "Keeping ReShade64.dll: run OptiDX with --update after installing "
+            "the patched OptiScaler nightly to enable the WGL fix"
+        )
         return False
 
     # Prepare uninstall tracking before changing the DLL; roll back if saving
@@ -2089,8 +2370,9 @@ def migrate_reshade(directory="."):
         if manifest.is_file():
             lines = manifest.read_text(encoding="utf-8").splitlines()
             if RESHADE_LEGACY_DLL_NAME in lines:
-                lines = sorted({RESHADE_DLL_NAME if p == RESHADE_LEGACY_DLL_NAME else p
-                                for p in lines if p})
+                lines = sorted(
+                    {RESHADE_DLL_NAME if p == RESHADE_LEGACY_DLL_NAME else p for p in lines if p}
+                )
                 fd, pending = tempfile.mkstemp(prefix=MANIFEST + ".", dir=directory)
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write("\n".join(lines) + "\n")
@@ -2117,8 +2399,9 @@ def install_reshade():
     if QUIRK_SKIP_RESHADE:
         return
     migrate_reshade()
-    existing = next((name for name in (RESHADE_DLL_NAME, RESHADE_LEGACY_DLL_NAME)
-                     if os.path.isfile(name)), None)
+    existing = next(
+        (name for name in (RESHADE_DLL_NAME, RESHADE_LEGACY_DLL_NAME) if os.path.isfile(name)), None
+    )
     if existing and not FORCE_UPDATE:
         info("ReShade already present")
         ensure_reshade_proxy(existing)
@@ -2126,7 +2409,10 @@ def install_reshade():
     proxy_was_reshade = False
     if existing and os.path.isfile(QUIRK_OPTISCALER_DLL):
         try:
-            proxy_was_reshade = hashlib.sha256(Path(existing).read_bytes()).digest() == hashlib.sha256(Path(QUIRK_OPTISCALER_DLL).read_bytes()).digest()
+            proxy_was_reshade = (
+                hashlib.sha256(Path(existing).read_bytes()).digest()
+                == hashlib.sha256(Path(QUIRK_OPTISCALER_DLL).read_bytes()).digest()
+            )
         except OSError:
             pass
     if not HAVE_7Z:
@@ -2149,7 +2435,7 @@ def install_reshade():
             break
     if not dll:
         for p in Path(rdir).rglob("*"):
-            if p.is_file() and re.search(r'reshade.*64.*\.dll$', p.name, re.I):
+            if p.is_file() and re.search(r"reshade.*64.*\.dll$", p.name, re.I):
                 dll = p
                 break
     if dll:
@@ -2166,9 +2452,11 @@ def install_reshade():
     else:
         warn("ReShade64.dll not found inside the installer")
 
+
 ###############################################################################
 # INSTALL FLOW
 ###############################################################################
+
 
 def track(path):
     if path:
@@ -2211,31 +2499,39 @@ def uninstall_dir(d):
         return False
     info(f"Uninstalling OptiDX files from {d}...")
     removed = 0
+    failures = []
     try:
         lines = open(manifest_path, errors="ignore").read().splitlines()
-    except OSError:
-        lines = []
+    except OSError as exc:
+        raise OSError("Cannot read removal manifest") from exc
     for p in lines:
         # Refuse absolute paths and traversal - the manifest is ours, but a
         # corrupted one must never let a delete escape the game directory.
-        if not p or p.startswith("/") or ".." in p:
+        if not p:
+            continue
+        from optidx_desktop.inspection import contained
+
+        contained(d, p)
+        if ".." in Path(p).parts:
             continue
         target = os.path.join(d, p)
         if os.path.exists(target) or os.path.islink(target):
             info(f"Removing: {p}")
             try:
                 if os.path.isdir(target) and not os.path.islink(target):
-                    shutil.rmtree(target, ignore_errors=True)
+                    raise ValueError("Refusing directory entry in removal manifest: " + p)
                 else:
                     os.remove(target)
                 removed += 1
-            except OSError:
-                pass
+            except OSError as exc:
+                failures.append(p + ": " + str(exc))
+    if failures:
+        raise OSError("Removal incomplete: " + "; ".join(failures))
     for f in (manifest_path, os.path.join(d, MARKER)):
         try:
             os.remove(f)
-        except OSError:
-            pass
+        except OSError as exc:
+            raise OSError("Could not remove installation tracking: " + f) from exc
     success(f"Removed {removed} item(s) from {d}")
     return True
 
@@ -2264,7 +2560,9 @@ def verify_installation():
         success(f"OptiScaler active ({QUIRK_OPTISCALER_DLL})")
         found = True
     try:
-        addons = [f for f in os.listdir(".") if os.path.isfile(f) and re.search(r'\.addon(64|32)?$', f)]
+        addons = [
+            f for f in os.listdir(".") if os.path.isfile(f) and re.search(r"\.addon(64|32)?$", f)
+        ]
     except OSError:
         addons = []
     for a in addons:
@@ -2308,18 +2606,35 @@ def warm_install_caches():
             if not QUIRK_SKIP_OPTISCALER:
                 if HAVE_7Z:
                     tasks.append(ex.submit(prepare_optiscaler))
-                tasks.append(ex.submit(lambda: prepare_payload((amd_release_asset() or {}).get("browser_download_url"))))
+                tasks.append(
+                    ex.submit(
+                        lambda: prepare_payload(
+                            (amd_release_asset() or {}).get("browser_download_url")
+                        )
+                    )
+                )
             if not QUIRK_SKIP_DLSS_ENABLER:
                 tasks.append(ex.submit(prepare_dlss))
-        if (not QUIRK_SKIP_RESHADE and HAVE_7Z and
-                not any(os.path.isfile(name) for name in (RESHADE_DLL_NAME, RESHADE_LEGACY_DLL_NAME))):
+        if (
+            not QUIRK_SKIP_RESHADE
+            and HAVE_7Z
+            and not any(
+                os.path.isfile(name) for name in (RESHADE_DLL_NAME, RESHADE_LEGACY_DLL_NAME)
+            )
+        ):
             tasks.append(ex.submit(prepare_payload, RESHADE_URL))
         if not LUMA_ONLY:
             tasks.append(ex.submit(cache_fetch, RENODX_WIKI, "renodx_mods.md", 86400))
             tasks.append(ex.submit(cache_fetch, RENODX_MIRROR_API, "renodx_mirror_raw.json", 21600))
         else:
-            tasks.append(ex.submit(cache_fetch, f"https://api.github.com/repos/{REPO_LUMA}/releases/latest",
-                                   "luma_release.json", 3600))
+            tasks.append(
+                ex.submit(
+                    cache_fetch,
+                    f"https://api.github.com/repos/{REPO_LUMA}/releases/latest",
+                    "luma_release.json",
+                    3600,
+                )
+            )
         for t in tasks:
             try:
                 t.result()
@@ -2339,15 +2654,22 @@ def component_present(name):
         except OSError:
             return False
     if name == "amd_fsr":
-        return os.path.isfile("OptiScaler/" + AMD_DLL_NAME) and not os.path.isfile("OptiScaler/" + HELIXSR_STATE)
+        return os.path.isfile("OptiScaler/" + AMD_DLL_NAME) and not os.path.isfile(
+            "OptiScaler/" + HELIXSR_STATE
+        )
     if name == "helixsr":
-        return (os.path.isfile("OptiScaler/" + HELIXSR_STATE) and os.path.isfile("OptiScaler/" + AMD_DLL_NAME)) or os.path.isfile("OptiScaler/HelixSR/helixsr.dll")
+        return (
+            os.path.isfile("OptiScaler/" + HELIXSR_STATE)
+            and os.path.isfile("OptiScaler/" + AMD_DLL_NAME)
+        ) or os.path.isfile("OptiScaler/HelixSR/helixsr.dll")
     if name == "dlss_enabler":
         return os.path.isfile("OptiScaler/dlss-enabler-headless.dll")
     if name == "renodx":
         return bool(glob.glob("renodx-*.addon64") or glob.glob("renodx-*.addon32"))
     if name == "luma":
-        return bool(glob.glob("*.addon") or glob.glob("*Luma*.addon64") or glob.glob("*luma*.addon64"))
+        return bool(
+            glob.glob("*.addon") or glob.glob("*Luma*.addon64") or glob.glob("*luma*.addon64")
+        )
     return False
 
 
@@ -2355,7 +2677,10 @@ def component_owner(path):
     low = path.replace("\\", "/").lower()
     if low == COMPONENT_STATE:
         return None
-    if low in ("optiscaler/" + HELIXSR_STATE, "optiscaler/.optidx-helixsr-original.bin") or low.startswith("optiscaler/helixsr/"):
+    if low in (
+        "optiscaler/" + HELIXSR_STATE,
+        "optiscaler/.optidx-helixsr-original.bin",
+    ) or low.startswith("optiscaler/helixsr/"):
         return "helixsr"
     if low == "optiscaler/" + AMD_DLL_NAME and Path("OptiScaler", HELIXSR_STATE).is_file():
         return "helixsr"
@@ -2367,16 +2692,27 @@ def component_owner(path):
         return "renodx"
     if low.endswith(".addon") or "luma" in low:
         return "luma"
-    if low in (RESHADE_DLL_NAME.lower(), RESHADE_LEGACY_DLL_NAME.lower(), "reshade.ini", "reshadepreset.ini"):
+    if low in (
+        RESHADE_DLL_NAME.lower(),
+        RESHADE_LEGACY_DLL_NAME.lower(),
+        "reshade.ini",
+        "reshadepreset.ini",
+    ):
         return "reshade"
-    if low == QUIRK_OPTISCALER_DLL.lower() and not os.path.isfile("OptiScaler.ini") and component_present("reshade"):
+    if (
+        low == QUIRK_OPTISCALER_DLL.lower()
+        and not os.path.isfile("OptiScaler.ini")
+        and component_present("reshade")
+    ):
         return "reshade"
     return "optiscaler"
 
 
 def owned_components():
     result = {name: set() for name in COMPONENT_NAMES}
-    state = load_json(COMPONENT_STATE) if os.path.isfile(COMPONENT_STATE) else None
+    from optidx_desktop.storage import read_json
+
+    state = read_json(COMPONENT_STATE, None)
     if state and isinstance(state.get("files"), dict):
         for name, paths in state["files"].items():
             if name in result:
@@ -2407,35 +2743,79 @@ def write_component_manifest(owners):
             if os.path.isfile(name):
                 os.remove(name)
         return
-    atomic_write(COMPONENT_STATE, (json.dumps({"version": 1, "selected": sorted(COMPONENT_SELECTION),
-                 "files": {name: sorted(paths) for name, paths in owners.items()}}) + "\n").encode())
+    atomic_write(
+        COMPONENT_STATE,
+        (
+            json.dumps(
+                {
+                    "version": 1,
+                    "selected": sorted(COMPONENT_SELECTION),
+                    "files": {name: sorted(paths) for name, paths in owners.items()},
+                }
+            )
+            + "\n"
+        ).encode(),
+    )
     remaining.add(COMPONENT_STATE)
     atomic_write(MANIFEST, ("\n".join(sorted(remaining)) + "\n").encode())
 
 
 def install_selected_components():
     global MOD_FOUND, CUSTOM_SETUP_COMPLETED
+    from optidx_desktop.core_payload import reconcile_amd_ownership
+
+    reconcile_amd_ownership(Path.cwd())
     selected = set(COMPONENT_SELECTION)
     owners = owned_components()
-    if "amd_fsr" in selected and Path("OptiScaler", HELIXSR_STATE).is_file():
+    if (
+        "amd_fsr" in selected
+        and Path("OptiScaler", HELIXSR_STATE).is_file()
+        and not (PRUNE_COMPONENTS and "helixsr" not in selected)
+    ):
         raise ValueError("Remove managed HelixSR before installing Cyboman FSR")
     if {"helixsr", "amd_fsr"} <= selected:
         raise ValueError("Choose HelixSR or Cyboman lossy FSR, not both")
     if not selected and not PRUNE_COMPONENTS:
-        raise ValueError("Select at least one component, or enable removal of unchecked managed components")
+        raise ValueError(
+            "Select at least one component, or enable removal of unchecked managed components"
+        )
     for dependency, consumers in [("reshade", {"renodx", "luma"}), ("optiscaler", {"helixsr"})]:
         removing = PRUNE_COMPONENTS and dependency not in selected and bool(owners[dependency])
-        if selected.intersection(consumers) and dependency not in selected and (removing or not component_present(dependency)):
-            raise ValueError("Select " + dependency + " or use an existing installation for " + ", ".join(sorted(selected.intersection(consumers))))
-    if "helixsr" in selected and not (Path(HELIXSR_SOURCE_DLL) if HELIXSR_SOURCE_DLL else HELIXSR_DIR / AMD_DLL_NAME).is_file():
-        raise ValueError("Local HelixSR DLL is missing; choose the built DLL before selecting HelixSR")
+        if (
+            selected.intersection(consumers)
+            and dependency not in selected
+            and (removing or not component_present(dependency))
+        ):
+            raise ValueError(
+                "Select "
+                + dependency
+                + " or use an existing installation for "
+                + ", ".join(sorted(selected.intersection(consumers)))
+            )
+    if (
+        "helixsr" in selected
+        and not (
+            Path(HELIXSR_SOURCE_DLL) if HELIXSR_SOURCE_DLL else HELIXSR_DIR / AMD_DLL_NAME
+        ).is_file()
+    ):
+        raise ValueError(
+            "Local HelixSR DLL is missing; choose the built DLL before selecting HelixSR"
+        )
     # Selected downloads only; DLL writes stay sequential.
     tasks = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         if "optiscaler" in selected and HAVE_7Z:
-            tasks.append(pool.submit(lambda: fetch_payload((optiscaler_urls() or [""])[0], None, 2)))
+            tasks.append(
+                pool.submit(lambda: fetch_payload((optiscaler_urls() or [""])[0], None, 2))
+            )
         if "amd_fsr" in selected:
-            tasks.append(pool.submit(lambda: fetch_payload((amd_release_asset() or {}).get("browser_download_url", ""), None, 2)))
+            tasks.append(
+                pool.submit(
+                    lambda: fetch_payload(
+                        (amd_release_asset() or {}).get("browser_download_url", ""), None, 2
+                    )
+                )
+            )
         if "dlss_enabler" in selected:
             tasks.append(pool.submit(lambda: fetch_payload(dlss_enabler_url() or "", None, 2)))
         if "reshade" in selected and HAVE_7Z and (FORCE_UPDATE or not component_present("reshade")):
@@ -2443,13 +2823,51 @@ def install_selected_components():
         if "renodx" in selected:
             tasks.append(pool.submit(cache_fetch, RENODX_WIKI, "renodx_mods.md", 86400))
         if "luma" in selected:
-            tasks.append(pool.submit(cache_fetch, f"https://api.github.com/repos/{REPO_LUMA}/releases/latest", "luma_release.json", 3600))
+            tasks.append(
+                pool.submit(
+                    cache_fetch,
+                    f"https://api.github.com/repos/{REPO_LUMA}/releases/latest",
+                    "luma_release.json",
+                    3600,
+                )
+            )
         for task in tasks:
             try:
                 task.result()
             except Exception as error:
                 warn(f"Prefetch deferred: {error}")
     if PRUNE_COMPONENTS:
+        if "helixsr" not in selected and owners["helixsr"]:
+            from optidx_desktop.helixsr import remove
+            from optidx_desktop.models import Game
+            from optidx_desktop.storage import Repository
+
+            remove(
+                Game(
+                    "backend",
+                    GAME_NAME or "Game",
+                    "Manual",
+                    str(Path.cwd()),
+                    str(Path.cwd() / "game.exe"),
+                ),
+                Repository(),
+                {},
+                module=__import__("types").SimpleNamespace(**globals()),
+            )
+            owners = owned_components()
+        if "optiscaler" not in selected:
+            from optidx_desktop import assets
+
+            if "backend:optiscaler" in assets.state(Path.cwd())["groups"]:
+                assets.remove(Path.cwd(), "backend:optiscaler")
+                owners["optiscaler"].clear()
+        from optidx_desktop import assets
+
+        for component, group in (("reshade", "channel:reshade"), ("amd_fsr", "backend:amd_fsr")):
+            if component not in selected and group in assets.state(Path.cwd())["groups"]:
+                paths = set(assets.state(Path.cwd())["groups"][group]["files"])
+                assets.remove(Path.cwd(), group)
+                owners[component].difference_update(paths)
         for name in COMPONENT_NAMES:
             if name not in selected:
                 if name == "renodx" and owners[name] and not restore_ue_hdr("."):
@@ -2458,22 +2876,42 @@ def install_selected_components():
                     ini = Path("OptiScaler.ini")
                     text = ini.read_text(encoding="utf-8")
                     values = hdr_ini_values(text, "Libraries")
-                    reset = {key: "auto" for key in ("FfxDx12Path", "FfxDx12SRPath")
-                             if values.get(key.casefold(), "").startswith(proton_path(Path("OptiScaler/HelixSR")) + "\\") or values.get(key.casefold(), "") == proton_path(Path("OptiScaler") / AMD_DLL_NAME)}
+                    reset = {
+                        key: "auto"
+                        for key in ("FfxDx12Path", "FfxDx12SRPath")
+                        if values.get(key.casefold(), "").startswith(
+                            proton_path(Path("OptiScaler/HelixSR")) + "\\"
+                        )
+                        or values.get(key.casefold(), "")
+                        == proton_path(Path("OptiScaler") / AMD_DLL_NAME)
+                    }
                     if reset:
-                        atomic_write(ini, set_ini_values(text, "Libraries", reset).encode(), ini.stat().st_mode & 0o777)
+                        atomic_write(
+                            ini,
+                            set_ini_values(text, "Libraries", reset).encode(),
+                            ini.stat().st_mode & 0o777,
+                        )
                 for path in owners[name]:
                     if os.path.isfile(path):
                         os.remove(path)
                 owners[name].clear()
     failures = []
+
     def addons():
         global MOD_FOUND
         MOD_FOUND = False
         find_renodx_mod()
         install_engine_fallback()
-    actions = {"optiscaler": install_optiscaler, "amd_fsr": install_amd_dll, "helixsr": install_helixsr,
-               "dlss_enabler": install_dlss_enabler, "reshade": install_reshade, "renodx": addons, "luma": find_luma_mod}
+
+    actions = {
+        "optiscaler": install_optiscaler,
+        "amd_fsr": install_amd_dll,
+        "helixsr": install_helixsr,
+        "dlss_enabler": install_dlss_enabler,
+        "reshade": install_reshade,
+        "renodx": addons,
+        "luma": find_luma_mod,
+    }
     for name in ("optiscaler", "amd_fsr", "helixsr", "dlss_enabler", "reshade", "renodx", "luma"):
         if name not in selected:
             continue
@@ -2482,19 +2920,31 @@ def install_selected_components():
         try:
             result = actions[name]()
             new = set(INSTALLED_FILES[start:])
-            addon_landed = name in ("renodx", "luma") and any(Path(p).suffix.lower() in (".addon", ".addon32", ".addon64") for p in new)
-            if result is False or (not component_present(name) and not addon_landed) or (FORCE_UPDATE and not new):
+            addon_landed = name in ("renodx", "luma") and any(
+                Path(p).suffix.lower() in (".addon", ".addon32", ".addon64") for p in new
+            )
+            if (
+                result is False
+                or (not component_present(name) and not addon_landed)
+                or (FORCE_UPDATE and not new)
+            ):
                 failures.append(name)
             if name in ("renodx", "luma") and new:
                 for old in owners[name] - new:
-                    if Path(old).suffix.lower() in (".addon64", ".addon32", ".addon") and os.path.isfile(old):
+                    if Path(old).suffix.lower() in (
+                        ".addon64",
+                        ".addon32",
+                        ".addon",
+                    ) and os.path.isfile(old):
                         os.remove(old)
                         owners[name].discard(old)
             for other in owners:
                 owners[other].difference_update(new)
             owners[name].update(new)
             if name == "helixsr":
-                owners[name] = {p for p in owners[name] if not p.lower().startswith("optiscaler/helixsr/")}
+                owners[name] = {
+                    p for p in owners[name] if not p.lower().startswith("optiscaler/helixsr/")
+                }
         except Exception:
             owners[name].update(INSTALLED_FILES[start:])
             write_component_manifest(owners)
@@ -2524,7 +2974,9 @@ def do_install():
         return
 
     if TEST_MODE:
-        info("Test mode: matching RenoDX/Luma mods; matched addons may be downloaded into this folder.")
+        info(
+            "Test mode: matching RenoDX/Luma mods; matched addons may be downloaded into this folder."
+        )
         find_renodx_mod()
         if not MOD_FOUND:
             find_luma_mod()
@@ -2572,14 +3024,17 @@ def do_install():
             pass
     _log(f"\n{C['OK']}{C['BOLD']}  All done! Installation complete.{C['RESET']}")
 
+
 ###############################################################################
 # CLI / ENTRYPOINT
 ###############################################################################
 
-def usage():
-    print(f"""OptiDX v{SCRIPT_VERSION} (Python) - OptiScaler + RenoDX installer
 
-  optidx.py [options] [-- <command to launch the game>]
+def usage():
+    print(
+        f"""OptiDX v{SCRIPT_VERSION} (Python) - OptiScaler + RenoDX installer
+
+  OptiDX.py [options] [-- <command to launch the game>]
 
   --renodx       Only install RenoDX/Luma mods (skip OptiScaler/DLSS)
   --luma         Only install Luma mods
@@ -2596,8 +3051,10 @@ def usage():
 Options must come BEFORE the game command; everything after the first
 non-option argument is forwarded to the game untouched.
 
-Steam launch options:   /path/to/optidx.py %command%
-""", file=sys.stderr)
+Steam launch options:   /path/to/OptiDX.py %command%
+""",
+        file=sys.stderr,
+    )
 
 
 def launch_now():
@@ -2677,7 +3134,13 @@ def main(argv):
 
     # ---- fast path -------------------------------------------------------
     # Already installed and just launching: hand off immediately.
-    if have_game and not FORCE_UPDATE and not DO_UNINSTALL and not TEST_MODE and os.path.isfile(marker_path):
+    if (
+        have_game
+        and not FORCE_UPDATE
+        and not DO_UNINSTALL
+        and not TEST_MODE
+        and os.path.isfile(marker_path)
+    ):
         installed_at = ""
         try:
             with open(marker_path) as f:
@@ -2690,8 +3153,10 @@ def main(argv):
         configure_ue_hdr(installed_at)
         try:
             with open(os.path.join(installed_at, "optidx.log"), "a", encoding="utf-8") as f:
-                f.write(f"OptiDX v{SCRIPT_VERSION}: already installed, launching "
-                         f"({time.strftime('%Y-%m-%d %H:%M:%S')})\n")
+                f.write(
+                    f"OptiDX v{SCRIPT_VERSION}: already installed, launching "
+                    f"({time.strftime('%Y-%m-%d %H:%M:%S')})\n"
+                )
         except OSError:
             pass
         launch_now()
@@ -2705,7 +3170,7 @@ def main(argv):
     if DO_UNINSTALL:
         found = False
         for root, dirs, files in os.walk(START_DIR):
-            rel_depth = root[len(START_DIR):].count(os.sep)
+            rel_depth = root[len(START_DIR) :].count(os.sep)
             if rel_depth >= 6:
                 dirs[:] = []
             if MANIFEST in files:
@@ -2726,7 +3191,12 @@ def main(argv):
         return
 
     if check_requirements() and need_workspace():
-        if os.path.isfile(marker_path) and not FORCE_UPDATE and not TEST_MODE and COMPONENT_SELECTION is None:
+        if (
+            os.path.isfile(marker_path)
+            and not FORCE_UPDATE
+            and not TEST_MODE
+            and COMPONENT_SELECTION is None
+        ):
             try:
                 with open(marker_path) as f:
                     installed_at = f.readline().strip()

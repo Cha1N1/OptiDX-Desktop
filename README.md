@@ -6,17 +6,17 @@ Find your games, choose the components you want, install them before playing, an
 
 > Looking for the original launch script? **[Cha1N1/OptiDX](https://github.com/Cha1N1/OptiDX) remains the script-only project.** OptiDX Desktop is developed separately and includes its own adapted backend. You do not need to install the old script to use Desktop.
 
-![OptiDX Desktop 0.3.5 with its near-black theme and HelixSR DLL picker](docs/screenshots/desktop.png)
+![OptiDX Desktop interface with its near-black theme and HelixSR DLL picker](docs/screenshots/desktop.png)
 
-*Interface preview with a sample library. Dark is the default; Light and System colors are also available.*
+*Interface preview from 0.3.5 with a sample library. Dark is the default; Light and System colors are also available.*
 
-## What’s new in 0.3.5
+## What’s new in 0.3.6
 
-- **Refreshed interface:** white accents on near-black blue, a matching header icon, clearer spacing and consistent controls.
-- **Standalone HelixSR:** choose your locally built x64 DLL with the compact Browse field. No separate weights or kernels are needed. HelixSR and Cyboman FSR are mutually exclusive, with visible explanations for disabled choices.
-- **Visible maintenance actions:** update and uninstall stay on the main Installation page.
-- **Faster AppImage startup:** gzip packaging and less repeated work before the window appears.
-- **Smoother navigation:** accelerated scrolling, short transitions, retained drafts and Dark / Light / System appearance options.
+- **Custom upscalers:** install checked Cyboman Exact/Lossy/Lite and prepared local HelixSR FSR4/DLSS variants alongside one another with a capable OptiScaler nightly.
+- **Safer updates:** recognize current custom-loader builds, preserve saved OptiScaler settings, and update legacy vendor files without adopting unrelated files.
+- **Moved-game recovery:** verified moved installations retain their originals and recovery history. Changing executable folders keeps separate recovery baselines.
+- **Bounded storage:** operation history is opt-in, with retention limits and explicit cleanup; verified originals and interrupted recovery remain protected.
+- **Maintenance:** stronger ownership checks, isolated optional updates, shared KDE HDR sessions and more responsive library/draft handling.
 
 ## Features
 
@@ -35,18 +35,18 @@ Optional tools include frame limiters, OptiPatcher, RE Framework, an eligible Un
 
 ### AppImage — recommended
 
-Download `OptiDX-Desktop-0.3.5-x86_64.AppImage` and its `.sha256` file from [GitHub Releases](https://github.com/Cha1N1/OptiDX-Desktop/releases) when the 0.3.5 assets are published. Put both files in the same directory, then run:
+Download `OptiDX-Desktop-0.3.6-x86_64.AppImage` and its `.sha256` file from [GitHub Releases](https://github.com/Cha1N1/OptiDX-Desktop/releases) when the 0.3.6 assets are published. Put both files in the same directory, then run:
 
 ```bash
-sha256sum -c OptiDX-Desktop-0.3.5-x86_64.AppImage.sha256
-chmod +x OptiDX-Desktop-0.3.5-x86_64.AppImage
-./OptiDX-Desktop-0.3.5-x86_64.AppImage
+sha256sum -c OptiDX-Desktop-0.3.6-x86_64.AppImage.sha256
+chmod +x OptiDX-Desktop-0.3.6-x86_64.AppImage
+./OptiDX-Desktop-0.3.6-x86_64.AppImage
 ```
 
 If FUSE is unavailable:
 
 ```bash
-./OptiDX-Desktop-0.3.5-x86_64.AppImage --appimage-extract-and-run
+./OptiDX-Desktop-0.3.6-x86_64.AppImage --appimage-extract-and-run
 ```
 
 The AppImage bundles Python, Qt and the download/archive tools. Your graphics drivers, game launcher and Wine/Proton runner come from your system. Optional integrations such as Gamescope and vkBasalt require their host tools to be installed.
@@ -102,6 +102,55 @@ New profiles select **Cyboman lossy FSR** and leave **HelixSR off**. HelixSR and
 
 When HelixSR is checked, choose your locally built Windows x64 FSR DLL in the path field below it. Current HelixSR builds need only the DLL; separate weights and kernels are not required. The DLL replaces `OptiScaler/amd_fidelityfx_upscaler_dx12.dll` directly, without renaming it to `helixsr.dll` or creating a HelixSR subfolder. A verified backup retains the replaced DLL. The path is saved per game and included in drafts; the app does not compile weights during game startup. Update and uninstall buttons are always visible on Installation. To switch an existing managed setup back to direct FSR, use **Installation → Remove HelixSR / restore previous AMD DLL**. This restores the replaced DLL when a verified backup exists; if no previous DLL existed, it removes HelixSR without inventing a replacement. Remove the managed HelixSR replacement before installing Cyboman. Restart the game after changing DLL routing.
 
+Changing the selected executable to another folder within a game keeps separate
+recovery baselines for each installation folder. Updates preserve the current
+OptiScaler.ini, including settings saved by the in-game menu.
+
+### Multiple OptiScaler custom upscalers
+
+On **Installation → OptiScaler custom upscalers**, open the dropdown and tick only
+what you want installed: Cyboman Exact, retrained Lossy, older Lossy2, Lite Exact,
+Lite Lossy, HelixSR FSR 4 and/or HelixSR DLSS Model E. These choices are saved per
+game and in drafts. Saving does not install files.
+
+First install a capable OptiScaler build. Under **Component download sources and
+advanced detection**, select **Upstream nightly (custom upscalers)**, then install
+OptiScaler with the normal component action. This source uses the official
+`optiscaler/OptiScaler-nightly` repository independently of the configured fork.
+Custom deployment checks the installed DLL for the loader capability; stable
+0.9.4 is unsupported. Initial custom support is for x64 DX12 games; gameplay
+compatibility is not established by detection.
+
+Choose your Cyboman hardware family (RX 6000, RX 7000, RDNA2 iGPU/Steam Deck or
+RDNA3 iGPU/other GPUs), optionally pin a release tag or choose a local archive,
+then click **Install / update checked custom upscalers**. One hardware archive is
+downloaded; only checked DLLs and their warning files are copied to independent
+`OptiScaler/custom/<variant>/ffx` folders. HelixSR uses separately selected,
+already prepared local DLLs: FSR4 goes in `ffx`, its NGX DLSS runtime in `dlss` as
+`nvngx.dll`. Do not use unprepared release ZIP DLLs. No build, model download or
+compilation is performed by these actions or during game startup.
+
+The [2026-10-29 Cyboman release](https://github.com/zgauthier2000/fsr4-shader-performance-overrides/releases/tag/dll-2026-10-29)
+contains `exact`, `lossy`, `4.1.2l-exact` and `4.1.2l-lossy`. Its retrained Lossy
+replaces the former Lossy2; a separately named Lossy2 is available only in older
+archives. Missing variants fail before game writes, without silently substituting
+another build. Older Lossy2 is disabled for current downloads; a saved obsolete
+selection shows guidance and blocks installation until unticked or an older
+source is chosen. The backend rejects it before downloading as well. Lossy trades delayed brightening for fewer foliage specks; Lite
+Lossy has mixed foliage results and less accurate particles in upstream's clips.
+Read the retained `WARNING.txt`. Cyboman upstream excludes RX 9000 and online games.
+
+Restart the game and choose a variant in OptiScaler's in-game menu. The direct
+Cyboman/HelixSR component controls above remain separate and keep their existing
+mutual exclusion; custom variants can coexist with each other and that direct
+DLL. Existing direct installs are not migrated or replaced. Unchecking custom
+variants preserves installed files unless **Remove unchecked managed custom
+upscalers during this action** is enabled. **Remove all managed custom upscalers**
+removes just those managed groups; if a removed variant was the saved DX12
+default, its setting returns to `auto`. Full setup removal also removes the groups.
+Installed variants participate in managed updates with per-group rollback and
+exclusions, even when unchecked; local sources must remain available to update.
+
 ### Launch settings
 
 Steam/Heroic games launch through their owning launcher. **Launching through a store URI does not automatically apply the app's saved environment or HDR options.** Use the managed profile wrapper when you want those settings applied.
@@ -112,7 +161,9 @@ Manually added games can use a saved Wine, Proton or UMU runner and prefix. Bott
 
 ## Backups and local data
 
-Before deployment, the app takes verified snapshots of relevant files and retains ownership records for managed components. Failed operations attempt rollback; any recovery failures are reported with the retained backup locations.
+Before deployment, the app takes temporary verified snapshots for automatic rollback. **Keeping operation snapshots is off by default.** After a successful job (or successful rollback), its temporary copies are removed. Verified original-file recovery data and ownership records remain available for safe component removal. Interrupted operations and failures requiring manual recovery keep their snapshots.
+
+In **App settings**, opt in to **Keep operation snapshots after jobs** and choose a limit (default: **3 snapshots per game**, maximum 50). **Delete completed operation snapshots…** removes older completed history while preserving original-file recovery data and interrupted jobs. Existing history is kept until you clean it explicitly or enable bounded retention. Original recovery data can still take space when large DLLs were replaced; this is separate from optional history.
 
 **Recovery** checks snapshot targets and hashes before restoring recorded files. It retains newer unrecorded files and refuses restores that would lose newer ownership/journal data. Snapshot restore does not revert saved profiles or external HDR configuration. Use full setup removal for uninstalling managed components.
 
@@ -130,6 +181,32 @@ or, by default:
 
 This contains the library cache, profiles, drafts, settings, job history, logs and backups. Download caches and prepared HelixSR assets use their existing OptiDX XDG locations. Personal library data, profiles and user-supplied DLLs are not included in the AppImage.
 
+### After moving a managed game
+
+Refresh the library or update the selected executable to its new location, then
+run the normal update action. The worker can rebind a moved install automatically
+when the old installation folder is absent and the executable folder keeps the
+same layout relative to the game root. It verifies managed binary hashes and
+original-file backups before changing the marker. Legacy Desktop installs can
+use their component manifest and recorded Cyboman DLL checksum for verification.
+
+Recovery snapshots for that game's old root/executable scope are rebound with
+verified payloads; original snapshot files remain unchanged. A durable relocation
+journal retains the previous metadata. Marker publication happens last so an
+interrupted rebind can finish on retry. Later job rollback retains the new location.
+Read-only update checks do not rewrite the marker. If the old install still
+exists, ownership cannot be verified or the executable layout also changed, the
+app refuses automatic adoption. Existing absolute custom DLL/configuration paths
+and launcher commands are not rewritten; review those separately after moving.
+
+Older Desktop setups recorded whole `Licenses` and `OptiScaler` folders instead
+of individual files. Upgrades now recognize overlapping vendor files actually
+present in the new OptiScaler archive beneath those recorded folders. Those files
+can update without replacement approval, with previous bytes retained for recovery.
+Unrelated files are untouched; custom/legacy HelixSR folders and independently
+owned component DLLs are not adopted by the core updater. Modern hash-conflict,
+architecture, symlink and path-capitalization checks still apply.
+
 ## Compatibility and current limits
 
 This is an **early public release for Linux x86_64**. The full component stack targets **64-bit DX11/DX12 Windows games running through Wine/Proton**.
@@ -142,7 +219,12 @@ This is an **early public release for Linux x86_64**. The full component stack t
 - Windows driver-profile features such as RTX HDR and Smooth Motion are not implemented.
 - Cross-distribution and older-CPU AppImage compatibility, every upstream live download source and actual gameplay compatibility have not been comprehensively validated.
 
-Current validation includes **165 automated tests**, bundled-Python tests, temporary-folder deployment/recovery checks and native Wayland AppImage startup. These checks do not replace testing a particular game and mod combination. See [current feature status](docs/RHI_PARITY.md) and [release notes](RELEASE_NOTES.md).
+Current validation includes **243 automated tests**, bundled-Python tests, temporary-folder deployment/recovery checks and fresh-data offscreen AppImage startup. These checks do not replace testing a particular game and mod combination. See [current feature status](docs/RHI_PARITY.md) and [release notes](RELEASE_NOTES.md).
+
+Maintenance adds strict recovery-record reads, verified TLS retries, shared KDE HDR
+sessions, debounced drafts, and isolated optional update transactions. Profiles and
+recovery records migrate to stable Steam/Heroic identities; legacy records remain
+available. See the [maintenance record](docs/MAINTENANCE_2026-10-18.md) for details.
 
 ## Troubleshooting and bug reports
 
@@ -151,13 +233,19 @@ Current validation includes **165 automated tests**, bundled-Python tests, tempo
 - If managed launch options have no effect, confirm the copied wrapper is configured in the launcher. Store URI launching alone uses the launcher's existing settings.
 - After a failed job, inspect **Job history**, its log and the reported rollback result before retrying.
 
-When opening an issue in this Desktop repository, include the app version, distribution/desktop, launcher, runner, game/API, affected component and the job error. **Copy diagnostics** can help; review the report and logs before posting, as they can contain local paths and saved environment values.
+When opening an issue in this Desktop repository, include the app version, distribution/desktop, launcher, runner, game/API, affected component and the job error. **Copy diagnostics** can help; review the report and logs before posting, as they contain local paths and non-secret preferences. Secret-like environment keys are redacted.
 
 Please keep Desktop issues separate from reports for the [original script](https://github.com/Cha1N1/OptiDX).
 
 ## Development
 
+Install optional development tools with `python3 -m pip install -e '.[dev]'`.
+`optidx-desktop` is also available as an installed command. Formatting, lint, tests,
+and a fresh-data offscreen preview run in CI:
+
 ```bash
+black --check optidx_desktop backend tests packaging launcher.py
+ruff check optidx_desktop backend tests packaging launcher.py
 python3 -B -m unittest discover -s tests -q
 QT_QPA_PLATFORM=offscreen ./run.sh --data-dir /tmp/optidx-preview --screenshot /tmp/optidx-preview.png
 ```

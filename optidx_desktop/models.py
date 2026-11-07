@@ -1,9 +1,11 @@
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+import copy
+from typing import Callable
 import hashlib
 from pathlib import Path
 
 
-@dataclass
+@dataclass(frozen=True)
 class Game:
     id: str
     title: str
@@ -34,3 +36,26 @@ class Game:
 
 def game_id(store, key):
     return hashlib.sha256((store + ":" + str(key)).encode()).hexdigest()[:20]
+
+
+@dataclass(frozen=True)
+class Job:
+    game: Game
+    action: str
+    preferences: dict = field(default_factory=dict)
+    options: dict = field(default_factory=dict)
+    callback: Callable | None = field(default=None, compare=False, repr=False)
+
+    def __post_init__(self):
+        object.__setattr__(self, "preferences", copy.deepcopy(self.preferences))
+        object.__setattr__(self, "options", copy.deepcopy(self.options))
+
+
+def stable_game_id(game):
+    if game.store == "Steam" and game.app_id:
+        return game_id("Steam", game.app_id)
+    if game.store == "Heroic" and game.app_id:
+        return game_id(
+            "Heroic", ":".join((game.launcher_kind or "native", game.runner, game.app_id))
+        )
+    return game.id

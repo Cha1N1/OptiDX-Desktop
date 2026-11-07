@@ -16,8 +16,16 @@ import sys
 import sysconfig
 
 ROOT = Path(__file__).resolve().parents[1]
-HOST_LIBRARIES = ("libGL.so", "libGLX.so", "libGLdispatch.so", "libEGL.so", "libOpenGL.so",
-                  "libvulkan.so", "libdrm", "libgbm.so")
+HOST_LIBRARIES = (
+    "libGL.so",
+    "libGLX.so",
+    "libGLdispatch.so",
+    "libEGL.so",
+    "libOpenGL.so",
+    "libvulkan.so",
+    "libdrm",
+    "libgbm.so",
+)
 
 
 def copy(source, destination):
@@ -26,8 +34,14 @@ def copy(source, destination):
 
 
 def ignored(directory, names):
-    return {name for name in names if name in {"__pycache__", "site-packages", "test", "tests", "idlelib", "tkinter", "ensurepip"}
-            or name.startswith("_tkinter.") or name.endswith((".pyc", ".pyi", ".a"))}
+    return {
+        name
+        for name in names
+        if name
+        in {"__pycache__", "site-packages", "test", "tests", "idlelib", "tkinter", "ensurepip"}
+        or name.startswith("_tkinter.")
+        or name.endswith((".pyc", ".pyi", ".a"))
+    }
 
 
 def dependencies(path):
@@ -41,7 +55,10 @@ def dependencies(path):
 
 
 def runtime_from_image(source, destination):
-    with source.open("rb") as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data:
+    with (
+        source.open("rb") as stream,
+        mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data,
+    ):
         if data[:4] != b"\x7fELF" or data[8:11] != b"AI\x02":
             raise ValueError("Runtime source is not a type-2 AppImage")
         offset = data.find(b"hsqs")
@@ -57,8 +74,12 @@ def runtime_from_image(source, destination):
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(runtime)
         destination.chmod(0o755)
-    return {"source_name": source.name, "sha256": hashlib.sha256(runtime).hexdigest(),
-            "upstream": "https://github.com/AppImage/type2-runtime", "bytes": len(runtime)}
+    return {
+        "source_name": source.name,
+        "sha256": hashlib.sha256(runtime).hexdigest(),
+        "upstream": "https://github.com/AppImage/type2-runtime",
+        "bytes": len(runtime),
+    }
 
 
 def build(args):
@@ -69,6 +90,7 @@ def build(args):
         raise RuntimeError("Install appimagetool before building")
     from PySide6.QtCore import QLibraryInfo
     import PySide6
+
     version_ns = {}
     exec((ROOT / "optidx_desktop/__init__.py").read_text(), version_ns)
     version = version_ns["__version__"]
@@ -98,8 +120,10 @@ def build(args):
         file = Path(importlib.util.find_spec("PySide6." + module).origin)
         copy(file, target / file.name)
     import yaml
+
     shutil.copytree(Path(yaml.__file__).parent, site / "yaml", ignore=ignored)
     import shiboken6
+
     shutil.copytree(Path(shiboken6.__file__).parent, site / "shiboken6", ignore=ignored)
     plugins = Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath))
     choices = {
@@ -108,7 +132,10 @@ def build(args):
         "platformthemes": ["libqxdgdesktopportal.so"],
         "wayland-decoration-client": ["libbradient.so"],
         "wayland-shell-integration": ["libxdg-shell.so", "libwl-shell-plugin.so"],
-        "wayland-graphics-integration-client": ["libqt-plugin-wayland-egl.so", "libshm-emulation-server.so"],
+        "wayland-graphics-integration-client": [
+            "libqt-plugin-wayland-egl.so",
+            "libshm-emulation-server.so",
+        ],
         "xcbglintegrations": ["libqxcb-glx-integration.so", "libqxcb-egl-integration.so"],
     }
     for category, names in choices.items():
@@ -138,8 +165,11 @@ def build(args):
         copy(ROOT / "packaging/tool-wrapper.sh", wrapper)
         wrapper.chmod(0o755)
     seeds = [p for p in appdir.rglob("*") if p.is_file() and p.read_bytes()[:4] == b"\x7fELF"]
-    seeds += [p for name in ["libnss_dns.so.2", "libnss_files.so.2", "libnss_compat.so.2", "libresolv.so.2"]
-              if (p := Path("/usr/lib") / name).exists()]
+    seeds += [
+        p
+        for name in ["libnss_dns.so.2", "libnss_files.so.2", "libnss_compat.so.2", "libresolv.so.2"]
+        if (p := Path("/usr/lib") / name).exists()
+    ]
     copied = set()
     original_files = set()
     excluded = set()
@@ -176,24 +206,42 @@ def build(args):
             copy(certificates, data / "certificates.pem")
             break
     wrapper = appdir / "usr/bin/python3"
-    wrapper.write_text((ROOT / "packaging/python-wrapper.sh").read_text().replace("@PYTHON@", python_name))
+    wrapper.write_text(
+        (ROOT / "packaging/python-wrapper.sh").read_text().replace("@PYTHON@", python_name)
+    )
     wrapper.chmod(0o755)
     copy(ROOT / "packaging/apprun.sh", appdir / "AppRun")
     (appdir / "AppRun").chmod(0o755)
     launcher = appdir / "usr/bin/optidx-desktop"
-    launcher.write_text('#!/bin/bash\nset -euo pipefail\napp_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)\nexec "$app_root/AppRun" "$@"\n')
+    launcher.write_text(
+        '#!/bin/bash\nset -euo pipefail\napp_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)\nexec "$app_root/AppRun" "$@"\n'
+    )
     launcher.chmod(0o755)
     copy(ROOT / "packaging/optidx-desktop.desktop", appdir / "optidx-desktop.desktop")
     copy(ROOT / "packaging/optidx-desktop.svg", appdir / "optidx-desktop.svg")
     (appdir / ".DirIcon").symlink_to("optidx-desktop.svg")
-    copy(ROOT / "packaging/optidx-desktop.desktop", appdir / "usr/share/applications/optidx-desktop.desktop")
-    copy(ROOT / "packaging/optidx-desktop.svg", appdir / "usr/share/icons/hicolor/scalable/apps/optidx-desktop.svg")
-    (appdir / "usr/bin/qt.conf").write_text("[Paths]\nPrefix=..\nPlugins=lib/qt6/plugins\nLibraries=lib\n")
+    copy(
+        ROOT / "packaging/optidx-desktop.desktop",
+        appdir / "usr/share/applications/optidx-desktop.desktop",
+    )
+    copy(
+        ROOT / "packaging/optidx-desktop.svg",
+        appdir / "usr/share/icons/hicolor/scalable/apps/optidx-desktop.svg",
+    )
+    (appdir / "usr/bin/qt.conf").write_text(
+        "[Paths]\nPrefix=..\nPlugins=lib/qt6/plugins\nLibraries=lib\n"
+    )
     licenses = appdir / "usr/share/licenses"
     licenses.mkdir(parents=True)
     if shutil.which("pacman"):
-        sources = list(original_files) + tool_sources + [Path(sys.executable).resolve(), pyside / "__init__.py", Path(yaml.__file__)]
-        packages = subprocess.run(["pacman", "-Qoq", *map(str, sources)], capture_output=True, text=True)
+        sources = (
+            list(original_files)
+            + tool_sources
+            + [Path(sys.executable).resolve(), pyside / "__init__.py", Path(yaml.__file__)]
+        )
+        packages = subprocess.run(
+            ["pacman", "-Qoq", *map(str, sources)], capture_output=True, text=True
+        )
         for package in sorted(set(packages.stdout.splitlines())):
             directory = Path("/usr/share/licenses") / package
             if directory.is_dir():
@@ -204,8 +252,12 @@ def build(args):
     runtime_record = None
     runtime_file = Path(args.runtime_file).resolve() if args.runtime_file else None
     if runtime_file:
-        runtime_record = {"source_name": runtime_file.name, "sha256": hashlib.sha256(runtime_file.read_bytes()).hexdigest(),
-                          "bytes": runtime_file.stat().st_size, "upstream": "https://github.com/AppImage/type2-runtime"}
+        runtime_record = {
+            "source_name": runtime_file.name,
+            "sha256": hashlib.sha256(runtime_file.read_bytes()).hexdigest(),
+            "bytes": runtime_file.stat().st_size,
+            "upstream": "https://github.com/AppImage/type2-runtime",
+        }
     if args.runtime_source:
         runtime_file = ROOT / "build/runtime-x86_64"
         runtime_record = runtime_from_image(Path(args.runtime_source).resolve(), runtime_file)
@@ -213,12 +265,21 @@ def build(args):
         "AppImage type-2 runtime. Copyright (c) 2004-23 probonopd. MIT license.\n"
         "Runtime source and full license: https://github.com/AppImage/type2-runtime\n"
         "https://github.com/AppImage/type2-runtime/blob/main/LICENSE\n"
-        "Includes musl libc, libfuse, squashfuse, zstd, and zlib; their license links are in the runtime LICENSE.\n")
-    manifest = {"version": version, "architecture": "x86_64", "python": sys.version.split()[0],
-                "qt": QLibraryInfo.version().toString(), "pyside": PySide6.__version__,
-                "build_platform": platform.platform(), "private_loader": True,
-                "bundled_libraries": sorted(copied), "host_graphics_libraries": sorted(excluded),
-                "runtime": runtime_record, "compression": args.compression}
+        "Includes musl libc, libfuse, squashfuse, zstd, and zlib; their license links are in the runtime LICENSE.\n"
+    )
+    manifest = {
+        "version": version,
+        "architecture": "x86_64",
+        "python": sys.version.split()[0],
+        "qt": QLibraryInfo.version().toString(),
+        "pyside": PySide6.__version__,
+        "build_platform": platform.platform(),
+        "private_loader": True,
+        "bundled_libraries": sorted(copied),
+        "host_graphics_libraries": sorted(excluded),
+        "runtime": runtime_record,
+        "compression": args.compression,
+    }
     (data / "BUILD_INFO.json").write_text(json.dumps(manifest, indent=2) + "\n")
     image = destination / f"OptiDX-Desktop-{version}-x86_64.AppImage"
     pending_image = destination / ("." + image.name + ".pending")
@@ -241,8 +302,14 @@ def build(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output")
-    parser.add_argument("--compression", choices=("gzip", "xz"), default="gzip",
-                        help="SquashFS compression (default: gzip for faster startup)")
+    parser.add_argument(
+        "--compression",
+        choices=("gzip", "xz"),
+        default="gzip",
+        help="SquashFS compression (default: gzip for faster startup)",
+    )
     parser.add_argument("--runtime-file", help="Official AppImage type-2 runtime binary")
-    parser.add_argument("--runtime-source", help="Local type-2 AppImage to reuse its runtime executable only")
+    parser.add_argument(
+        "--runtime-source", help="Local type-2 AppImage to reuse its runtime executable only"
+    )
     build(parser.parse_args())

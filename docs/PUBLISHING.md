@@ -2,8 +2,8 @@
 
 Publish Desktop in its own repository. Keep
 [Cha1N1/OptiDX](https://github.com/Cha1N1/OptiDX) for the original script.
-`OptiDX-Desktop` is a suggested name for the new repository; it has not been
-created by this work.
+The release links use `Cha1N1/OptiDX-Desktop`; verify the intended remote before
+uploading. Release preparation does not create or modify a remote repository.
 
 ## What belongs in the source repository
 
@@ -23,6 +23,20 @@ Do not upload `build/`, `dist/`, Python caches, `optidx-theme-icons-*`, virtual
 environments, machine-specific configuration, profiles, download caches or prepared
 weights as repository source. `.gitignore` excludes the local generated files.
 Git ignore rules only affect Git; manually uploading a folder does not apply them.
+
+## Prepared 0.3.6 files
+
+The local release is under `dist/`:
+
+- `OptiDX-Desktop-0.3.6-source/`: clean source tree for inspection or upload.
+- `OptiDX-Desktop-0.3.6-source.tar.gz` and `.sha256`: source archive and checksum.
+- `OptiDX-Desktop-0.3.6-source-manifest.json`: SHA-256 of every exported source file.
+- `OptiDX-Desktop-0.3.6-x86_64.AppImage` and `.sha256`: executable and checksum.
+
+The export contains an explicit set of source/documentation directories and root
+files, filtered through Git ignore rules. It contains no Git metadata, build
+runtime, personal state, prepared DLLs or weights. Existing older releases remain
+untouched. Extract the source archive before uploading its contents as source.
 
 ## Upload through the browser
 
@@ -65,8 +79,10 @@ a Git repository. Skip `git init`; inspect its remotes before adding an `origin`
 Attach these files as assets of a GitHub **Release** in the Desktop repository:
 
 ```text
-OptiDX-Desktop-0.3.5-x86_64.AppImage
-OptiDX-Desktop-0.3.5-x86_64.AppImage.sha256
+OptiDX-Desktop-0.3.6-x86_64.AppImage
+OptiDX-Desktop-0.3.6-x86_64.AppImage.sha256
+OptiDX-Desktop-0.3.6-source.tar.gz
+OptiDX-Desktop-0.3.6-source.tar.gz.sha256
 ```
 
 Keep executable builds out of the source commit. A clean source archive can also
