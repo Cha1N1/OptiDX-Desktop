@@ -283,7 +283,7 @@ class UiTests(unittest.TestCase):
 
         other = replace(origin, id="other")
         with (
-            patch("optidx_desktop.feature_ui.QInputDialog.getItem", return_value=("cas", True)),
+            patch("PySide6.QtWidgets.QInputDialog.getItem", return_value=("cas", True)),
             patch.object(features, "job") as job,
         ):
             features.vulkan_effects()
@@ -317,7 +317,7 @@ class UiTests(unittest.TestCase):
         }
         atomic_json(self.repository.directory / "shared-profiles.json", {"Shared": shared})
         with (
-            patch("optidx_desktop.feature_ui.QInputDialog.getItem", return_value=("Shared", True)),
+            patch("PySide6.QtWidgets.QInputDialog.getItem", return_value=("Shared", True)),
             patch.object(self.window.features, "games_picker", return_value=[other]),
         ):
             self.window.features.batch_profile()

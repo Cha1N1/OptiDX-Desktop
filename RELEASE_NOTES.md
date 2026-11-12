@@ -1,3 +1,31 @@
+# Unreleased
+
+- **Startup resilience:** a corrupt profile or ownership record no longer stops the
+  app from opening. The affected game shows "Needs attention", its management
+  actions and profile saving stay disabled with the reason, and the record is
+  kept unchanged as evidence.
+- **Cancel and roll back:** a running job can be cancelled from the footer; files
+  it changed are restored from its snapshot. Recovery state is recorded
+  structurally, and a busy game lock reports a clear message.
+- **Stable launch commands:** copied Steam/Heroic commands use a launcher in the
+  app data folder that follows the most recently opened AppImage, so upgrading or
+  moving the AppImage no longer breaks them. If the AppImage is missing, the game
+  still starts without managed settings.
+- **Games keep running when the app closes:** manual launches run detached, write
+  their output to a launch log and keep the Running indicator across restarts.
+- **Storage:** App settings → Storage shows backup, cache, import and log usage,
+  clears download caches on request, and removes cache entries unused for 30 days
+  at startup. Cached downloads are hashed without loading them into memory.
+- **App updates:** an optional startup check (and a manual button) reports newer
+  OptiDX Desktop releases. AppImages embed update information for
+  AppImageUpdate-compatible tools; nothing is installed automatically.
+- **Privacy:** job requests are sent to the worker on stdin and the GitHub token
+  is passed to curl on stdin, so neither appears in process arguments.
+- **Components:** DLSS Enabler installs natively with Windows x64 checks, digest
+  verification and a retained original in the Desktop ownership ledger. Cyboman
+  lossy FSR downloads through the shared app cache. Component rules are declared
+  once. See [the migration record](docs/ARCHITECTURE_MIGRATION.md).
+
 # OptiDX Desktop 0.3.6 — prepared 2026-11-07
 
 - Changing the selected executable folder keeps separate recovery originals for

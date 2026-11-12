@@ -8,6 +8,9 @@ LOG_LIMIT = 8 * 1024 * 1024
 
 def trim_history(records, directory, limit=HISTORY_LIMIT):
     def protected(record):
+        if record.get("recovery_state") in {"manual", "interrupted"}:
+            return True
+        # Records written before recovery_state existed only carry text.
         value = (
             str(record.get("result", "")).lower() + " " + str(record.get("recovery", "")).lower()
         )

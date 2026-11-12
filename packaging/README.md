@@ -50,7 +50,7 @@ On systems without usable FUSE:
 ./OptiDX-Desktop-0.3.6-x86_64.AppImage --appimage-extract-and-run
 ```
 
-Your existing `~/.local/share/optidx-desktop` profiles, `~/.cache/optidx` downloads, and `~/.local/share/optidx/helixsr` prepared files are reused. Keep the AppImage at a stable path if using it as a game wrapper.
+Your existing `~/.local/share/optidx-desktop` profiles, `~/.cache/optidx` downloads, and `~/.local/share/optidx/helixsr` prepared files are reused. Copied wrapper commands use the stable launcher in `~/.local/share/optidx-desktop/bin`, which follows the most recently opened AppImage.
 
 Steam: **Copy launch options** emits a command using the persistent AppImage path and `--backend`, rather than a temporary mount path. Heroic: select the AppImage as the wrapper executable and put `--backend` followed by the desired backend flags in its arguments field. The GUI's normal Launch button still asks Steam/Heroic to launch their game directly.
 
@@ -82,3 +82,10 @@ QT_QPA_PLATFORM=wayland ./dist/OptiDX-Desktop-0.3.6-x86_64.AppImage --appimage-e
 
 Qt platform selection references: [Qt QPA](https://doc.qt.io/qt-6/qpa.html) and
 [QGuiApplication](https://doc.qt.io/qt-6/qguiapplication.html).
+
+## Update information
+
+Builds embed `gh-releases-zsync|Cha1N1|OptiDX-Desktop|latest|OptiDX-Desktop-*x86_64.AppImage.zsync`
+(recorded in `BUILD_INFO.json`). When `zsyncmake` is installed, appimagetool also
+writes `<image>.zsync`; upload it with the AppImage for delta updates. Pass
+`--update-information ""` to omit the embedded information.

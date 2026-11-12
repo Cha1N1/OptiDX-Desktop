@@ -12,7 +12,7 @@ import signal
 import subprocess
 import sys
 
-from .runtime import external_environment, appimage_arguments
+from .runtime import external_environment
 from .storage import read_json, data_dir
 
 # Named DRS settings are passed to DXVK-NVAPI, not written into Windows driver
@@ -206,6 +206,15 @@ def _process_token(pid):
         return None
 
 
+def process_running(pid, token):
+    """True while the recorded process (not a reused PID or zombie) still runs."""
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+    except (OSError, IndexError, TypeError):
+        return False
+    return bool(token) and fields[19] == token and fields[0] not in {"Z", "X"}
+
+
 def hdr_session(output, acquire):
     """Hold a lock only while updating shared HDR users, never for a game session."""
     from .storage import atomic_json
@@ -332,10 +341,12 @@ def profile_entry_arguments(profile_path):
 
 
 def wrapper_options(profile_path):
-    image = os.environ.get("APPIMAGE")
+    from .runtime import launcher_command
+
+    launcher = launcher_command()
     command = (
-        [str(Path(image).resolve()), *appimage_arguments(), "--launch-profile", str(profile_path)]
-        if image
+        [*launcher, "--launch-profile", str(profile_path)]
+        if launcher
         else [sys.executable, *profile_entry_arguments(profile_path)]
     )
     return shlex.join(command + ["--"]) + " %command%"

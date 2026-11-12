@@ -26,6 +26,7 @@ Read the documents relevant to the task:
 - `docs/REVIEW_2026-10-15.md`: regression findings and validation limits.
 - `packaging/README.md`: AppImage workflow and runtime provenance.
 - `RELEASE_NOTES.md`: user-facing release history.
+- `docs/ARCHITECTURE_MIGRATION.md`: ownership/component migration stages.
 
 Preserve historical reports. Update relevant documentation when behavior changes,
 and record durable decisions in the repository so future chats can continue.
@@ -34,8 +35,14 @@ weights in documentation or packages.
 
 ## Architecture and invariants
 
-- UI: `optidx_desktop/app.py` and `feature_ui.py`; queued jobs: `worker.py`;
-  bundled-script adapter: `backend.py`.
+- UI: `optidx_desktop/app.py` (layout) with `jobs_ui.py`, `launch_ui.py`,
+  `services_ui.py` mixins; feature pages in `feature_pages/`; Qt-free game status
+  and action availability in `status.py`. Queued jobs: `worker.py`;
+  bundled-script adapter: `backend.py`; typed failures: `errors.py`.
+- Components: `components.py` declares labels, dependencies, exclusivity and
+  ledger groups, and holds native installers. Follow
+  `docs/ARCHITECTURE_MIGRATION.md` when moving more components off the legacy
+  backend; keep `LEGACY_HOOKS` accurate.
 - Ownership/recovery: `assets.py`, `backups.py`, `storage.py`.
 - Discovery: `library.py`, `extra_library.py`; launching/environment:
   `launch.py`, `runtime.py`.

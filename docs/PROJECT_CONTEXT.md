@@ -3,6 +3,49 @@
 This is the continuation record for the standalone Linux desktop application.
 Use release notes for shipped changes and focused reports for detailed findings.
 
+## Architecture and robustness pass — 2026-11-13
+
+Implemented the agreed Tier 1/Tier 2 items plus selected Tier 3 items; the
+lifecycle harness was explicitly excluded. Source backup:
+`/home/DwE/project-backups/OptiDX-Desktop-before-architecture-20261112-2352.tar.gz`.
+The initial Git commit was attempted but blocked by the tool permission policy;
+the repository still has no commits.
+
+- Library/UI reads go through Qt-free `status.py`. Unreadable records mark only
+  their game "Needs attention", disable management/save with the reason and are
+  never rewritten. Strict reads still block jobs.
+- Worker failures are typed (`errors.py`): CorruptRecord, ManualRecoveryRequired,
+  GameBusy; structured `recovery` events and `recovery_state` history replace
+  message matching (legacy text still honoured for old records). The footer can
+  cancel the running job (SIGTERM rollback).
+- Job requests go to the worker on stdin (`--request` kept for compatibility);
+  the GitHub token reaches curl via `--config -` stdin, in Desktop and backend.
+- Copied launch commands use `$XDG_DATA_HOME/optidx-desktop/bin/optidx-launch`,
+  rewritten on GUI startup to the running AppImage; with a missing image it runs
+  the command after `--`. Manual game launches are detached (`running.json`,
+  `/proc` start-time + zombie checks); closing the app no longer waits for games.
+- App settings has a scrollable layout, Storage usage, cache clearing and a
+  30-day startup cache prune (job locks respected; backups untouched), and an
+  opt-in GitHub release notice. Builds embed AppImage update information.
+- `app.py`/`feature_ui.py` were split into mixins (`jobs_ui`, `launch_ui`,
+  `services_ui`, `feature_pages/*`, `widgets`).
+- `components.py` is the single rule registry. DLSS Enabler (new ledger group
+  `component:dlss_enabler`, originals retained, x64 check) and direct Cyboman
+  install natively through the shared download client. Remaining stages are in
+  `docs/ARCHITECTURE_MIGRATION.md`. Backend changes: token via stdin and
+  registry-driven ledger pruning; checksum/changes updated in SNAPSHOT.json,
+  upstream provenance unchanged.
+
+Validation: Black/Ruff (pinned versions in a scratch venv) and all 267 tests pass
+in source; the new/changed job, component, status, runtime and maintenance suites
+pass with the bundled interpreter and bundled curl. Rebuilt local 0.3.6 AppImage
+with the existing runtime (no version bump): checksum, embedded update
+information, FUSE-free version/backend help, fresh-data offscreen preview and
+packaged application/backend source parity pass. No .zsync was produced because
+zsyncmake is not installed. Settings/storage and main-window previews inspected.
+Temporary folders only; no real game writes, launches, live downloads or
+publication. Corrupt-record startup was reproduced before the fix and verified after.
+
 ## Local release preparation — 2026-11-07
 
 Prepared 0.3.6 from the current local code, separating post-0.3.5 maintenance and

@@ -3,7 +3,7 @@
   "version": "2.1.2-desktop.1",
   "upstream_version": "2.1.2",
   "upstream_sha256": "05d1b72cfdb9aba06baed79b0c340a910b73db02df80fadda0eb26bd86c785a1",
-  "sha256": "211dffb9e05a7a583f55725b45b5a55d196426fc26f1099ec6d024cc03adcbb3",
+  "sha256": "d80495ef5e4683dbf13710e1ec13b520edfea4083feb0898ea1761d7bc6b77e5",
   "changes": [
     "Independent component selection and ownership",
     "Official Cyboman lossy archive downloads",
@@ -18,6 +18,8 @@
     "Parse equals-delimited quirks, restrict prefix expansion to unique executable-derived high-coverage matches, and validate removal path components",
     "Refuse corrupt component/HelixSR recovery records and fsync atomic file contents, modes and replacement directories",
     "Consistent Black formatting; scoped Desktop backend contexts restore working directory and environment",
-    "Correct bundled CLI help to use the actual OptiDX.py filename"
+    "Correct bundled CLI help to use the actual OptiDX.py filename",
+    "Send the optional GitHub token through curl's stdin configuration instead of process arguments",
+    "Prune unselected components through every Desktop ledger group declared by the component registry"
   ]
 }

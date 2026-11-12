@@ -12,6 +12,7 @@ import sys
 import traceback
 
 from .backend import execute_backend
+from .errors import CorruptRecord, GameBusy, ManualRecoveryRequired
 from .backups import baseline_path, remember_baseline, restore_originals, snapshot
 from .models import Game
 from .storage import Repository
@@ -40,7 +41,12 @@ def _run_job(request, directory=None):
     locks = repository.directory / "locks"
     locks.mkdir(parents=True, exist_ok=True)
     with (locks / (key + ".lock")).open("w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise GameBusy(
+                "Another OptiDX operation is using this game. Try again when it finishes."
+            ) from error
         from .backend import validate_game
 
         if action not in {
@@ -218,15 +224,14 @@ def _run_job(request, directory=None):
 
             if errors:
                 finish_snapshots(game, repository, (folder, root_folder), "manual_recovery")
-                raise RuntimeError(
-                    f"{error}; rollback requires manual recovery: {'; '.join(errors)}"
-                ) from error
+                message = f"{error}; rollback requires manual recovery: {'; '.join(errors)}"
+                emit("recovery", state="manual", message=message)
+                raise ManualRecoveryRequired(message) from error
             # Do not delete a selected restore source while handling its failure.
             finish_snapshots(game, repository, (folder, root_folder), "rolled_back")
-            emit(
-                "progress",
-                message="Failed operation rolled back; snapshot retention follows app settings",
-            )
+            message = "Failed operation rolled back; snapshot retention follows app settings"
+            emit("recovery", state="rolled_back", message=message)
+            emit("progress", message=message)
             raise
         from .backups import finish_snapshots
 
@@ -293,12 +298,10 @@ def run_job(request, directory=None):
             try:
                 state = _run_job(operation, directory)
                 completed.append(label)
-            except JobInterrupted:
+            except (JobInterrupted, GameBusy, ManualRecoveryRequired, CorruptRecord):
+                # Never continue after cancellation, incomplete recovery or corruption.
                 raise
             except Exception as error:
-                # Never continue after incomplete recovery or corruption.
-                if "manual recovery" in str(error) or "Cannot read JSON record" in str(error):
-                    raise
                 errors.append(label + ": " + str(error))
                 emit("progress", message=errors[-1])
         if errors and not completed:
@@ -312,14 +315,23 @@ def run_job(request, directory=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--request", required=True)
+    # The request normally arrives on stdin: profiles may hold secret environment
+    # values, and command lines are readable by other local users via /proc.
+    parser.add_argument("--request", help="JSON request (default: read from stdin)")
     parser.add_argument("--data-dir")
     arguments = parser.parse_args()
     try:
-        run_job(json.loads(arguments.request), arguments.data_dir)
+        request = arguments.request if arguments.request is not None else sys.stdin.read()
+        run_job(json.loads(request), arguments.data_dir)
     except Exception as error:
         traceback.print_exc(file=sys.stderr)
-        emit("result", ok=False, error=str(error))
+        emit(
+            "result",
+            ok=False,
+            error=str(error),
+            error_type=type(error).__name__,
+            cancelled=isinstance(error, JobInterrupted),
+        )
         return 1
     return 0
 

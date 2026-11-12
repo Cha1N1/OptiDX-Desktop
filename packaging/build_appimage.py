@@ -16,6 +16,10 @@ import sys
 import sysconfig
 
 ROOT = Path(__file__).resolve().parents[1]
+# Keep in sync with optidx_desktop.app_updates.UPDATE_INFORMATION (checked by tests).
+UPDATE_INFORMATION = (
+    "gh-releases-zsync|Cha1N1|OptiDX-Desktop|latest|OptiDX-Desktop-*x86_64.AppImage.zsync"
+)
 HOST_LIBRARIES = (
     "libGL.so",
     "libGLX.so",
@@ -279,12 +283,17 @@ def build(args):
         "host_graphics_libraries": sorted(excluded),
         "runtime": runtime_record,
         "compression": args.compression,
+        "update_information": args.update_information,
     }
     (data / "BUILD_INFO.json").write_text(json.dumps(manifest, indent=2) + "\n")
     image = destination / f"OptiDX-Desktop-{version}-x86_64.AppImage"
     pending_image = destination / ("." + image.name + ".pending")
     pending_image.unlink(missing_ok=True)
     command = [tool, "--no-appstream", "--comp", args.compression]
+    if args.update_information:
+        # Lets AppImageUpdate-compatible tools find the release; appimagetool also
+        # writes a .zsync file next to the image when zsyncmake is installed.
+        command += ["-u", args.update_information]
     if runtime_file:
         command += ["--runtime-file", str(runtime_file)]
     command += [str(appdir), str(pending_image)]
@@ -293,6 +302,11 @@ def build(args):
     print("Building " + image.name, flush=True)
     subprocess.run(command, env=environment, check=True)
     os.replace(pending_image, image)
+    pending_zsync = pending_image.with_name(pending_image.name + ".zsync")
+    if pending_zsync.is_file():
+        os.replace(pending_zsync, image.with_name(image.name + ".zsync"))
+    elif args.update_information:
+        print("zsyncmake not found: no .zsync file was produced for delta updates", flush=True)
     image.chmod(0o755)
     checksum = hashlib.sha256(image.read_bytes()).hexdigest()
     image.with_name(image.name + ".sha256").write_text(checksum + "  " + image.name + "\n")
@@ -309,6 +323,11 @@ if __name__ == "__main__":
         help="SquashFS compression (default: gzip for faster startup)",
     )
     parser.add_argument("--runtime-file", help="Official AppImage type-2 runtime binary")
+    parser.add_argument(
+        "--update-information",
+        default=UPDATE_INFORMATION,
+        help="Embedded AppImage update information; pass an empty string to omit it",
+    )
     parser.add_argument(
         "--runtime-source", help="Local type-2 AppImage to reuse its runtime executable only"
     )

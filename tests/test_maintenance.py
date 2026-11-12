@@ -197,7 +197,7 @@ class MaintenanceTests(unittest.TestCase):
         calls = []
 
         def curl(command, **kwargs):
-            calls.append(command)
+            calls.append(command + [kwargs.get("input", "")])
             Path(command[command.index("-o") + 1]).write_bytes(b"{}")
             return SimpleNamespace(returncode=0)
 
@@ -207,8 +207,10 @@ class MaintenanceTests(unittest.TestCase):
         ):
             client.fetch("https://api.github.com/repos/example/test")
             client.fetch("https://example.test/mod")
-        self.assertIn("Authorization: Bearer fixture-secret", calls[0])
-        self.assertNotIn("Authorization: Bearer fixture-secret", calls[1])
+        # The token travels on curl's stdin config (last item), never as an argument.
+        self.assertIn("Authorization: Bearer fixture-secret", calls[0][-1])
+        self.assertFalse(any("fixture-secret" in part for part in calls[0][:-1]))
+        self.assertFalse(any("fixture-secret" in part for part in calls[1]))
         self.assertNotIn("--max-time", calls[0])
         self.assertIn("--speed-time", calls[0])
 

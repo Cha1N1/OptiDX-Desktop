@@ -263,6 +263,9 @@ def configure_backend(module, game, repository, preferences):
         module.detect_game = detect
     if preferences.get("force_ue_extended"):
         module.find_renodx_mod = lambda: None
+    from .components import attach_native
+
+    attach_native(module, game, repository, preferences)
 
 
 def record_version(game, component, value):

@@ -17,7 +17,7 @@ def check_updates(game, repository, preferences, client=None):
     dlss_manifest = None
     for scope, label in scopes.items():
         for group, item in assets.state(scope)["groups"].items():
-            if group in exclusions:
+            if group in exclusions or item["metadata"].get("component") in exclusions:
                 continue
             source = item["metadata"].get("source", {})
             if source.get("path"):

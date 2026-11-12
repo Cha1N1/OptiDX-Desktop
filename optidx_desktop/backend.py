@@ -13,15 +13,8 @@ from .inspection import inspect_game, manifest_paths
 
 BACKEND_PATH = Path(__file__).resolve().parents[1] / "backend/OptiDX.py"
 ACTIONS = {"install", "update", "remove", "configure"}
-COMPONENT_LABELS = {
-    "optiscaler": "OptiScaler",
-    "reshade": "ReShade",
-    "renodx": "RenoDX",
-    "luma": "Luma",
-    "amd_fsr": "Cyboman FSR 4.1.1 · lossy",
-    "helixsr": "HelixSR",
-    "dlss_enabler": "DLSS Enabler",
-}
+from .components import COMPONENT_LABELS, COMPONENTS, selection_problems  # noqa: E402
+
 LEGACY_COMPONENTS = {
     "full": {"optiscaler", "reshade", "renodx", "amd_fsr", "helixsr", "dlss_enabler"},
     "renodx": {"reshade", "renodx"},
@@ -40,7 +33,7 @@ def selected_components(preferences):
         not isinstance(value, bool) for value in values.values()
     ):
         raise ValueError("Component selection must contain boolean choices")
-    unknown = set(values) - set(COMPONENT_LABELS)
+    unknown = set(values) - set(COMPONENTS)
     if unknown:
         raise ValueError("Unknown components: " + ", ".join(sorted(unknown)))
     return {name for name, value in values.items() if value}
@@ -194,25 +187,17 @@ def _execute_backend(game, action, preferences, module=None):
             raise ValueError(
                 "Remove the managed neural consumer before installing stock OptiScaler; both intercept NGX calls."
             )
-        if int(preferences.get("bits_override") or info["bits"] or 64) == 32 and selected - {
-            "reshade",
-            "renodx",
-        }:
-            raise ValueError(
-                "32-bit games support ReShade/RenoDX; Luma and upscaler components require 64-bit."
-            )
-        if api in {"Vulkan", "DX8"}:
-            raise ValueError(
-                "Use the Linux Vulkan controls or configure a translation layer before DLL deployment."
-            )
-        if api in {"DX9", "OpenGL"} and selected - {"reshade", "renodx"}:
-            raise ValueError(
-                "Selected upscaler components require DX11/DX12; DX9/OpenGL supports ReShade and matching RenoDX addons."
-            )
-        if preferences.get("reshade_channel") == "no_addons" and selected.intersection(
-            {"renodx", "luma"}
-        ):
-            raise ValueError("Choose a ReShade channel with addon support for RenoDX/Luma.")
+        # Dependencies are checked by the installer, which can also reuse
+        # existing proxies that file inspection cannot attribute.
+        problems = selection_problems(
+            selected,
+            bits=int(preferences.get("bits_override") or info["bits"] or 64),
+            api=api,
+            reshade_channel=preferences.get("reshade_channel", ""),
+            dependencies=False,
+        )
+        if problems:
+            raise ValueError(problems[0])
     configure_environment(game, preferences)
     module = module or load_backend()
     if action in {"install", "update"} and "helixsr" in selected_components(effective):
@@ -316,14 +301,10 @@ def execute_backend(game, action, preferences, module=None):
 
 def launch_options(preferences=None):
     preferences = preferences or {}
-    image = os.environ.get("APPIMAGE")
-    from .runtime import appimage_arguments
+    from .runtime import launcher_command
 
-    args = (
-        [str(Path(image).resolve()), *appimage_arguments(), "--backend"]
-        if image
-        else [sys.executable, str(BACKEND_PATH)]
-    )
+    launcher = launcher_command()
+    args = [*launcher, "--backend"] if launcher else [sys.executable, str(BACKEND_PATH)]
     args += component_arguments(preferences)
     if not preferences.get("native_hdr", True):
         args.append("--no-ue-hdr")

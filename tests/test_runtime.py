@@ -1,4 +1,5 @@
 import os
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -189,25 +190,71 @@ class RuntimeTests(unittest.TestCase):
             with patch.dict(os.environ, {"OPTIDX_BUNDLED_PYTHON": str(wrapper)}):
                 self.assertEqual(python_executable(), str(wrapper))
 
-    def test_launch_options_reference_persistent_appimage_instead_of_mount(self):
-        with patch.dict(os.environ, {"APPIMAGE": "/home/user/Apps/OptiDX Desktop.AppImage"}):
+    def test_launch_options_reference_stable_launcher_instead_of_versioned_image(self):
+        with (
+            tempfile.TemporaryDirectory() as data,
+            patch.dict(
+                os.environ,
+                {
+                    "APPIMAGE": "/home/user/Apps/OptiDX Desktop-0.3.6.AppImage",
+                    "XDG_DATA_HOME": data,
+                },
+            ),
+        ):
             options = launch_options({"components": {"reshade": True}})
-        self.assertTrue(options.startswith("'/home/user/Apps/OptiDX Desktop.AppImage' --backend"))
+            launcher = str(Path(data) / "optidx-desktop/bin/optidx-launch")
+        self.assertTrue(options.startswith(launcher + " --backend"))
+        self.assertNotIn("0.3.6", options)
         self.assertNotIn("backend/OptiDX.py", options)
         self.assertTrue(options.endswith(" %command%"))
 
-    def test_fuse_free_launch_commands_keep_the_runtime_flag(self):
+    def test_stable_launcher_follows_the_running_appimage(self):
+        from optidx_desktop.runtime import ensure_launcher
         from optidx_desktop.launch import wrapper_options
-        from optidx_desktop.backend import launch_options
-        from unittest.mock import patch
-        import os
 
-        with patch.dict(
-            os.environ,
-            {"APPIMAGE": "/tmp/OptiDX.AppImage", "APPDIR": "/tmp/appimage_extracted_abc"},
+        with tempfile.TemporaryDirectory() as folder:
+            old, new = Path(folder) / "old.AppImage", Path(folder) / "new AppImage"
+            for image in (old, new):
+                image.write_text("#!/bin/sh\necho " + image.name + ' "$@"\n')
+                image.chmod(0o755)
+            data = Path(folder) / "data"
+            with patch.dict(os.environ, {"APPIMAGE": str(old), "XDG_DATA_HOME": str(data)}):
+                launcher = ensure_launcher()
+                copied = wrapper_options("/tmp/profile.json")
+            with patch.dict(os.environ, {"APPIMAGE": str(new), "XDG_DATA_HOME": str(data)}):
+                self.assertEqual(ensure_launcher(), launcher)
+                self.assertEqual(wrapper_options("/tmp/profile.json"), copied)
+            result = subprocess.run(
+                [str(launcher), "--launch-profile", "p", "--", "game"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.stdout.strip(), "new AppImage --launch-profile p -- game")
+            # A missing image still launches the game command that follows --.
+            new.unlink()
+            result = subprocess.run(
+                [str(launcher), "--launch-profile", "p", "--", "echo", "game ran"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.stdout.strip(), "game ran")
+            self.assertIn("missing", result.stderr)
+
+    def test_fuse_free_launcher_keeps_the_runtime_flag(self):
+        from optidx_desktop.runtime import ensure_launcher
+
+        with (
+            tempfile.TemporaryDirectory() as data,
+            patch.dict(
+                os.environ,
+                {
+                    "APPIMAGE": "/tmp/OptiDX.AppImage",
+                    "APPDIR": "/tmp/appimage_extracted_abc",
+                    "XDG_DATA_HOME": data,
+                },
+            ),
         ):
-            self.assertIn("--appimage-extract-and-run", wrapper_options("/tmp/profile.json"))
-            self.assertIn("--appimage-extract-and-run", launch_options({"components": {}}))
+            self.assertIn("--appimage-extract-and-run", ensure_launcher().read_text())
 
 
 if __name__ == "__main__":

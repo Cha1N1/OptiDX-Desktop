@@ -49,6 +49,6 @@ class InstallationPage(ProfilePage):
         self.maintenance.addLayout(layout)
 
     def add_section(self, title):
-        from .feature_ui import section
+        from .widgets import section
 
         return section(self.content, title, expanded=False)

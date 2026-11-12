@@ -484,8 +484,9 @@ def prune_snapshots(game, repository, limit=0):
     recovery_paths = {
         str(Path(path).resolve())
         for item in read_json(repository.directory / "job-history.json", [])
-        if item.get("result", "").startswith(("Running", "Interrupted"))
-        or "manual recovery" in item.get("result", "")
+        if item.get("recovery_state") in {"manual", "interrupted"}
+        or item.get("result", "").startswith(("Running", "Interrupted"))
+        or "manual recovery" in item.get("result", "")  # records before recovery_state
         for path in item.get("backups", [])
     }
     candidates = []

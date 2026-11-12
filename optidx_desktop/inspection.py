@@ -179,8 +179,18 @@ def inspect_game(game):
         and not (root / "OptiScaler/.optidx-helixsr.json").is_file(),
         "DLSS Enabler": (root / "OptiScaler/dlss-enabler-headless.dll").is_file(),
     }
-    hdr = read_json(root / ".optidx-ue-hdr.json", {})
-    ownership = read_json(root / ".optidx-components.json", {}).get("files", {})
+    record_errors = []
+
+    def record(name):
+        try:
+            value = read_json(root / name, {})
+            return value if isinstance(value, dict) else {}
+        except ValueError as error:
+            record_errors.append(str(error))
+            return {}
+
+    hdr = record(".optidx-ue-hdr.json")
+    ownership = record(".optidx-components.json").get("files", {})
     for name, key in [("RenoDX", "renodx"), ("Luma", "luma")]:
         for path in ownership.get(key, []):
             try:
@@ -196,6 +206,7 @@ def inspect_game(game):
         "installed": bool(managed),
         "hdr": hdr.get("status", "Unmanaged"),
         "manifest_error": manifest_error,
+        "record_errors": record_errors,
         "available": game.available,
         "target": str(root),
         "executable_exists": bool(game.executable and Path(game.executable).is_file()),
@@ -210,7 +221,11 @@ def foreign_dlls(game):
         tracked = set(manifest_paths(game.target))
     except (ValueError, OSError):
         return []
-    for item in state(game.target)["groups"].values():
+    try:
+        groups = state(game.target)["groups"]
+    except (ValueError, OSError):
+        return []
+    for item in groups.values():
         tracked.update(item["files"])
     records = []
     for name in [

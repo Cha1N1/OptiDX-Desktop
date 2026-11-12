@@ -53,7 +53,14 @@ The AppImage bundles Python, Qt and the download/archive tools. Your graphics dr
 
 The GUI prefers **native Wayland** on Wayland sessions, with X11 fallback. Its footer shows the backend in use. A deliberate single-backend `QT_QPA_PLATFORM` override is respected.
 
-Keep the AppImage at a stable location if you use it in game launch commands.
+Copied launch commands use a small launcher in your app data folder
+(`~/.local/share/optidx-desktop/bin/optidx-launch`) that follows the most recently
+opened AppImage, so upgrading or moving the AppImage does not break them. Open the
+new AppImage once after replacing it.
+
+AppImages embed update information for AppImageUpdate-compatible tools. App
+settings can also check GitHub for a newer release at startup; this only reports
+and links to the release.
 
 ### Run from source
 
@@ -155,15 +162,22 @@ exclusions, even when unchecked; local sources must remain available to update.
 
 Steam/Heroic games launch through their owning launcher. **Launching through a store URI does not automatically apply the app's saved environment or HDR options.** Use the managed profile wrapper when you want those settings applied.
 
-For Steam, use **Copy launch command** and paste it into the game's Steam Launch Options. The wrapper refers to the saved profile, so keep the AppImage and profile available. See the [packaging guide](packaging/README.md#use) for Heroic wrapper setup.
+For Steam, use **Copy launch command** and paste it into the game's Steam Launch Options. The wrapper refers to the saved profile and the stable launcher, so keep the profile available. See the [packaging guide](packaging/README.md#use) for Heroic wrapper setup.
 
-Manually added games can use a saved Wine, Proton or UMU runner and prefix. Bottles discovery and CLI launching are also supported.
+Manually added games can use a saved Wine, Proton or UMU runner and prefix. Bottles discovery and CLI launching are also supported. Games started from the app keep running after you close it; their wrapper output is written to `logs/launch-<game>.log`.
 
 ## Backups and local data
 
 Before deployment, the app takes temporary verified snapshots for automatic rollback. **Keeping operation snapshots is off by default.** After a successful job (or successful rollback), its temporary copies are removed. Verified original-file recovery data and ownership records remain available for safe component removal. Interrupted operations and failures requiring manual recovery keep their snapshots.
 
 In **App settings**, opt in to **Keep operation snapshots after jobs** and choose a limit (default: **3 snapshots per game**, maximum 50). **Delete completed operation snapshots…** removes older completed history while preserving original-file recovery data and interrupted jobs. Existing history is kept until you clean it explicitly or enable bounded retention. Original recovery data can still take space when large DLLs were replaced; this is separate from optional history.
+
+A running job can be stopped with **Cancel and roll back**; files it already
+changed are restored from its snapshot.
+
+**App settings → Storage** shows how much space backups, download caches, imports
+and logs use. Download caches can be cleared at any time and entries unused for 30
+days are removed at startup; backups and verified originals are not affected.
 
 **Recovery** checks snapshot targets and hashes before restoring recorded files. It retains newer unrecorded files and refuses restores that would lose newer ownership/journal data. Snapshot restore does not revert saved profiles or external HDR configuration. Use full setup removal for uninstalling managed components.
 
@@ -219,7 +233,7 @@ This is an **early public release for Linux x86_64**. The full component stack t
 - Windows driver-profile features such as RTX HDR and Smooth Motion are not implemented.
 - Cross-distribution and older-CPU AppImage compatibility, every upstream live download source and actual gameplay compatibility have not been comprehensively validated.
 
-Current validation includes **243 automated tests**, bundled-Python tests, temporary-folder deployment/recovery checks and fresh-data offscreen AppImage startup. These checks do not replace testing a particular game and mod combination. See [current feature status](docs/RHI_PARITY.md) and [release notes](RELEASE_NOTES.md).
+Current validation includes **267 automated tests**, bundled-Python tests, temporary-folder deployment/recovery checks and fresh-data offscreen AppImage startup. These checks do not replace testing a particular game and mod combination. See [current feature status](docs/RHI_PARITY.md) and [release notes](RELEASE_NOTES.md).
 
 Maintenance adds strict recovery-record reads, verified TLS retries, shared KDE HDR
 sessions, debounced drafts, and isolated optional update transactions. Profiles and
@@ -232,6 +246,7 @@ available. See the [maintenance record](docs/MAINTENANCE_2026-10-18.md) for deta
 - If a game uses the wrong binary, change its installation executable and refresh the details.
 - If managed launch options have no effect, confirm the copied wrapper is configured in the launcher. Store URI launching alone uses the launcher's existing settings.
 - After a failed job, inspect **Job history**, its log and the reported rollback result before retrying.
+- A game marked **Needs attention** has an unreadable profile or ownership record. The details panel names the file; repair or move it aside, then refresh. The app never overwrites it automatically.
 
 When opening an issue in this Desktop repository, include the app version, distribution/desktop, launcher, runner, game/API, affected component and the job error. **Copy diagnostics** can help; review the report and logs before posting, as they contain local paths and non-secret preferences. Secret-like environment keys are redacted.
 

@@ -1,13 +1,16 @@
-import codecs
 from dataclasses import replace
-from .models import Job
 from .pages import ProfilePage, InstallationPage, bind
 from .inspection import InspectionCache
 import json
 from pathlib import Path
-import re
 
-from PySide6.QtCore import QProcess, QThread, QTimer, QUrl, Qt, Signal, QFileSystemWatcher
+from PySide6.QtCore import (
+    QThread,
+    QTimer,
+    QUrl,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -31,8 +34,6 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
-    QSystemTrayIcon,
-    QMenu,
 )
 
 from . import __version__
@@ -40,7 +41,7 @@ from .backend import COMPONENT_LABELS, FG_CHOICES, launch_options, selected_comp
 from .inspection import DIRECTX_INPUTS
 from .library import manual_game, scan_library
 from .storage import Repository
-from .runtime import open_url, open_game_uri, python_executable
+from .runtime import open_url
 
 STYLE = """
 QWidget { background: $window; color: $text; font-family: 'Noto Sans', sans-serif; font-size: 13px; }
@@ -60,6 +61,7 @@ QPushButton#primary { background: $primary; color: $primary_text; font-weight: 6
 QPushButton#primary:hover { background: $primary_hover; }
 QPushButton#primary:disabled { background: $primary_disabled; color: $primary_disabled_text; border-color: $primary_disabled; }
 QPushButton#danger { color: $danger_text; }
+QPushButton#danger:disabled { color: $disabled_border; }
 QLineEdit, QComboBox, QPlainTextEdit { background: $input; border: 1px solid $strong_border; border-radius: 6px; padding: 8px; }
 QLineEdit:focus, QComboBox:focus { border-color: $primary; }
 QComboBox QAbstractItemView { background: $popup; selection-background-color: $popup_selection; }
@@ -113,7 +115,18 @@ def card(title):
 from .qol import WorkflowMixin
 
 
-class MainWindow(WorkflowMixin, QMainWindow):
+from .jobs_ui import JobRunnerMixin
+from .launch_ui import GameLaunchMixin
+from .services_ui import AppUpdateThread, BackgroundServicesMixin  # noqa: F401
+
+
+class MainWindow(
+    WorkflowMixin,
+    JobRunnerMixin,
+    GameLaunchMixin,
+    BackgroundServicesMixin,
+    QMainWindow,
+):
     def __init__(self, repository=None, auto_scan=True):
         super().__init__()
         self.repository = repository or Repository()
@@ -121,12 +134,19 @@ class MainWindow(WorkflowMixin, QMainWindow):
         self.init_workflow()
         self.inspection_cache = InspectionCache()
         self.selected = None
+        self.current_status, self.current_problems, self.action_state = None, [], {}
         self.queue = []
         self.process = None
+        self.cancel_requested = False
         self.scanner = None
         self.active_game = None
         self.result = None
         self.launch_processes = {}
+        self.launch_children = {}
+        self.running_timer = QTimer(self)
+        self.running_timer.setInterval(2000)
+        self.running_timer.timeout.connect(self.poll_running_games)
+        self.restore_running_games()
         self.quitting = False
         self.setWindowTitle("OptiDX Desktop — Linux game mod manager")
         self.resize(1220, 880)
@@ -145,8 +165,10 @@ class MainWindow(WorkflowMixin, QMainWindow):
 
         self.smooth_scrolling = SmoothScrolling(self)
         self.configure_services()
+        self.app_update_thread = None
         if auto_scan:
             QTimer.singleShot(0, self.scan)
+            QTimer.singleShot(0, self.startup_maintenance)
 
     def build_ui(self):
         outer = QWidget()
@@ -181,7 +203,7 @@ class MainWindow(WorkflowMixin, QMainWindow):
             "Update managed components and installed optional tools in games included in bulk updates."
         )
         header.addWidget(self.batch_button)
-        header.addWidget(button("App settings", lambda: self.features.app_dialog.exec()))
+        header.addWidget(button("App settings", lambda: self.features.open_app_settings()))
         layout.addLayout(header)
         stats = QHBoxLayout()
         self.stat_labels = []
@@ -284,7 +306,7 @@ class MainWindow(WorkflowMixin, QMainWindow):
         self.component_labels = {}
         self.notes = QLabel("No game selected.")
         self.notes.setWordWrap(True)
-        from .feature_ui import section
+        from .widgets import section
 
         status = section(overview, "Installed components and diagnostics", expanded=False)
         self.status_box = status
@@ -521,9 +543,20 @@ class MainWindow(WorkflowMixin, QMainWindow):
         self.queue_label.setObjectName("muted")
         footer.addWidget(self.queue_label)
         footer.addStretch()
+        self.stop_job_button = button("Cancel and roll back", self.cancel_current_job)
+        self.stop_job_button.setToolTip(
+            "Stop the running operation and restore the files it changed from its snapshot."
+        )
+        self.stop_job_button.setEnabled(False)
+        footer.addWidget(self.stop_job_button)
         self.cancel_button = button("Clear queued jobs", self.clear_queue)
         self.cancel_button.setEnabled(False)
         footer.addWidget(self.cancel_button)
+        self.app_update_button = button("", self.open_app_release)
+        self.app_update_button.setToolTip("Open the release page to download the new AppImage.")
+        self.app_update_button.hide()
+        self.app_update_release = None
+        footer.addWidget(self.app_update_button)
         platform = QApplication.platformName()
         backend_label = (
             "Wayland"
@@ -598,22 +631,7 @@ class MainWindow(WorkflowMixin, QMainWindow):
         text += " Shader packs, optional tools and DLL replacements have their own buttons."
         self.install_summary.setText(text)
         if hasattr(self, "install_button"):
-            exists = bool(
-                self.selected
-                and self.selected.executable
-                and Path(self.selected.executable).is_file()
-            )
-            info = self.inspection(self.selected) if self.selected else {}
-            supported = not info.get("apis") or bool(
-                set(info["apis"]).intersection(DIRECTX_INPUTS | {"DX9", "DX10", "OpenGL"})
-            )
-            self.install_button.setEnabled(
-                (bool(names) or self.prune_components.isChecked())
-                and exists
-                and supported
-                and self.process is None
-            )
-            self.refresh_workflow_status()
+            self.refresh_actions()
             self.install_button.setText(
                 "Install selected components"
                 if names
@@ -645,65 +663,62 @@ class MainWindow(WorkflowMixin, QMainWindow):
         text = self.search.text().casefold()
         filter_name = self.filter.currentText()
         self.list.blockSignals(True)
-        self.list.clear()
-        installed_count = 0
-        from .storage import read_json
+        # A failed refresh must never leave the library list silently disconnected.
+        try:
+            self.list.clear()
+            installed_count = 0
+            from .status import game_status
 
-        profiles = {game.id: self.repository.preferences(game) for game in self.games}
-        updates = {
-            game.id: read_json(self.repository.directory / "updates" / (game.id + ".json"), {})
-            for game in self.games
-        }
-        for game in self.ordered_games(profiles, updates):
-            profile = profiles[game.id]
-            installed = (
-                (game.target / ".optidx-files").is_file()
-                or bool(read_json(game.target / ".optidx-desktop-assets.json", {}).get("groups"))
-                or bool(
-                    read_json(Path(game.root) / ".optidx-desktop-assets.json", {}).get("groups")
-                )
-            )
-            installed_count += int(installed)
-            if (
-                text
-                and text
-                not in (
-                    game.title + " " + game.store + " " + profile.get("display_name", "")
-                ).casefold()
-            ):
-                continue
-            if filter_name == "Installed" and not installed:
-                continue
-            if filter_name == "Hidden" and not profile.get("hidden"):
-                continue
-            if filter_name != "Hidden" and profile.get("hidden"):
-                continue
-            if filter_name == "Favourites" and not profile.get("favourite"):
-                continue
-            update = updates[game.id].get("update_available")
-            if filter_name == "Updates available" and not update:
-                continue
-            if (
-                filter_name
-                not in {"All games", "Installed", "Favourites", "Hidden", "Updates available"}
-                and game.store != filter_name
-            ):
-                continue
-            suffix = " · Installed" if installed else ""
-            if update:
-                suffix += " · Update available"
-            if game.id in self.launch_processes:
-                suffix += " · Running"
-            if not game.available:
-                suffix += " · Offline"
-            item = QListWidgetItem(
-                (profile.get("display_name") or game.title) + "\n" + game.store + suffix
-            )
-            item.setData(Qt.ItemDataRole.UserRole, game.id)
-            self.list.addItem(item)
-            if game.id == selected_id:
-                self.list.setCurrentItem(item)
-        self.list.blockSignals(False)
+            statuses = {game.id: game_status(game, self.repository) for game in self.games}
+            self.statuses = statuses
+            profiles = {key: status.profile for key, status in statuses.items()}
+            updates = {key: status.update for key, status in statuses.items()}
+            for game in self.ordered_games(profiles, updates):
+                status = statuses[game.id]
+                profile = status.profile
+                installed = status.installed
+                installed_count += int(installed)
+                if (
+                    text
+                    and text
+                    not in (
+                        game.title + " " + game.store + " " + profile.get("display_name", "")
+                    ).casefold()
+                ):
+                    continue
+                if filter_name == "Installed" and not installed:
+                    continue
+                if filter_name == "Hidden" and not profile.get("hidden"):
+                    continue
+                if filter_name != "Hidden" and profile.get("hidden"):
+                    continue
+                if filter_name == "Favourites" and not profile.get("favourite"):
+                    continue
+                update = status.update_available
+                if filter_name == "Updates available" and not update:
+                    continue
+                if (
+                    filter_name
+                    not in {"All games", "Installed", "Favourites", "Hidden", "Updates available"}
+                    and game.store != filter_name
+                ):
+                    continue
+                suffix = " · Installed" if installed else ""
+                if update:
+                    suffix += " · Update available"
+                if game.id in self.launch_processes:
+                    suffix += " · Running"
+                if not game.available:
+                    suffix += " · Offline"
+                if status.needs_attention:
+                    suffix += " · Needs attention"
+                item = QListWidgetItem(status.display_name + "\n" + game.store + suffix)
+                item.setData(Qt.ItemDataRole.UserRole, game.id)
+                self.list.addItem(item)
+                if game.id == selected_id:
+                    self.list.setCurrentItem(item)
+        finally:
+            self.list.blockSignals(False)
         self.stat_labels[0].setText(str(len(self.games)))
         self.stat_labels[1].setText(str(installed_count))
         from .constants import helixsr_directory
@@ -743,7 +758,8 @@ class MainWindow(WorkflowMixin, QMainWindow):
         if not game:
             return
         info = self.inspection(game)
-        self.game_title.setText(self.repository.preferences(game).get("display_name") or game.title)
+        status = self.status_for(game)
+        self.game_title.setText(status.display_name)
         apis = " / ".join(info["apis"]) or "API not identified"
         bits = f"{info['bits']}-bit" if info["bits"] else "Architecture unknown"
         self.badges.setText(f"{game.store}  ·  {info['engine']}  ·  {apis}  ·  {bits}")
@@ -770,14 +786,29 @@ class MainWindow(WorkflowMixin, QMainWindow):
             )
         if info["manifest_error"]:
             notes += "\n" + info["manifest_error"]
+        for error in dict.fromkeys(status.errors + tuple(info.get("record_errors", ()))):
+            notes += "\nNeeds attention: " + error
+        if status.errors:
+            notes += (
+                "\nManagement actions stay disabled until the record is repaired or removed;"
+                " it is kept as evidence and never overwritten automatically."
+            )
         self.notes.setText(notes)
         self.features.refresh()
         self.refresh_actions()
         self.refresh_workflow()
 
+    def status_for(self, game):
+        from .status import game_status
+
+        return game_status(game, self.repository)
+
     def _load_profile(self):
-        profile = self.repository.preferences(self.selected)
-        selected = selected_components(profile)
+        profile = self.status_for(self.selected).profile
+        try:
+            selected = selected_components(profile)
+        except ValueError:
+            selected = set()
         info = self.inspection(self.selected)
         if not profile and (
             info["bits"] == 32
@@ -811,8 +842,8 @@ class MainWindow(WorkflowMixin, QMainWindow):
 
     def save_profile(self):
         if self.selected:
-            old = self.repository.preferences(self.selected)
             try:
+                old = self.repository.preferences(self.selected)
                 self.repository.save_preferences(self.selected, {**old, **self.profile()})
             except (ValueError, TypeError) as error:
                 self.report_error(str(error))
@@ -838,8 +869,10 @@ class MainWindow(WorkflowMixin, QMainWindow):
         self.scanner.start()
 
     def scanned(self, games, warnings):
+        from .status import game_status
+
         for index, game in enumerate(games):
-            chosen = self.repository.preferences(game).get("executable")
+            chosen = game_status(game, self.repository).profile.get("executable")
             if chosen and Path(chosen).is_file():
                 try:
                     Path(chosen).resolve().relative_to(Path(game.root).resolve())
@@ -896,394 +929,48 @@ class MainWindow(WorkflowMixin, QMainWindow):
             except ValueError:
                 self.report_error("Choose an executable within this game's installation folder.")
 
-    def enqueue(self, action):
-        if not self.selected:
-            return
-        if self.save_profile() is False:
-            return
-        self.queue.append(Job(self.selected, action, self.repository.preferences(self.selected)))
-        self.start_next()
-
-    def enqueue_feature(self, action, options=None, callback=None, game=None):
-        from .models import Game
-
-        if action in {"refresh_catalogs", "import_asset", "import_url", "prepare_template"}:
-            game = Game("global", "Library", "Global", str(self.repository.directory))
-        else:
-            game = game or self.selected
-        if not game:
-            return
-        if game == self.selected and self.save_profile() is False:
-            return
-        self.queue.append(
-            Job(game, action, self.repository.preferences(game), options or {}, callback)
-        )
-        self.start_next()
-
-    def start_next(self):
-        self.refresh_pending_jobs()
-        self.cancel_button.setEnabled(bool(self.queue))
-        if self.process is not None or not self.queue:
-            return
-        job = self.queue.pop(0)
-        self.refresh_pending_jobs()
-        game, action, preferences, options = job.game, job.action, job.preferences, job.options
-        self.job_callback = job.callback
-        self.active_game = game
-        self.result = None
-        self.stdout_buffer = ""
-        self.stdout_decoder = codecs.getincrementaldecoder("utf-8")("replace")
-        self.stderr_decoder = codecs.getincrementaldecoder("utf-8")("replace")
-        self.log.appendPlainText(f"\n{action.upper()} · {game.title}")
-        self.tabs.setCurrentWidget(self.log)
-        self.queue_label.setText(f"{action.title()}: {game.title} · {len(self.queue)} queued")
-        process = QProcess(self)
-        self.process = process
-        process.setWorkingDirectory(str(Path(__file__).resolve().parents[1]))
-        process.readyReadStandardOutput.connect(self.read_stdout)
-        process.readyReadStandardError.connect(self.read_stderr)
-        process.finished.connect(self.job_finished)
-        process.errorOccurred.connect(self.process_error)
-        request = json.dumps(
-            {
-                "game": game.to_dict(),
-                "action": action,
-                "preferences": preferences,
-                "options": options,
-            }
-        )
-        log_dir = self.repository.directory / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        import time
-
-        log_path = log_dir / f"{time.time_ns()}-{game.id}.log"
-        self.job_log = log_path.open("w+", encoding="utf-8")
-        self.current_history = {
-            "game_id": game.id,
-            "game": game.title,
-            "action": action,
-            "started": time.time(),
-            "result": "Running",
-            "log": str(log_path),
-            "backups": [],
-            "recovery": "No recovery reported",
-        }
-        self.history.append(self.current_history)
-        self.refresh_history()
-        process.start(
-            python_executable(),
-            [
-                "-B",
-                "-u",
-                "-m",
-                "optidx_desktop.worker",
-                "--request",
-                request,
-                "--data-dir",
-                str(self.repository.directory),
-            ],
-        )
-        self.refresh_actions()
-
-    def read_stdout(self):
-        if not self.process:
-            return
-        self.stdout_buffer += self.stdout_decoder.decode(
-            bytes(self.process.readAllStandardOutput())
-        )
-        while "\n" in self.stdout_buffer:
-            line, self.stdout_buffer = self.stdout_buffer.split("\n", 1)
-            try:
-                event = json.loads(line)
-            except ValueError:
-                self.log.appendPlainText(line)
-                continue
-            if event["event"] == "progress":
-                self.queue_label.setText(event["message"])
-                if self.current_history is not None and "rolled back" in event["message"]:
-                    self.current_history["recovery"] = event["message"]
-            elif event["event"] == "backup":
-                self.log.appendPlainText("Backup: " + event["path"])
-                if self.current_history is not None:
-                    self.current_history["backups"].append(event["path"])
-            elif event["event"] == "result":
-                self.result = event
-
-    def read_stderr(self):
-        if not self.process:
-            return
-        text = self.stderr_decoder.decode(bytes(self.process.readAllStandardError()))
-        text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
-        self.log.moveCursor(self.log.textCursor().MoveOperation.End)
-        self.log.insertPlainText(text)
-        from .history import write_log
-
-        write_log(self.job_log, text)
-
-    def process_error(self, error):
-        if error == QProcess.ProcessError.FailedToStart:
-            self.log.appendPlainText("Could not start the backend process")
-            self.job_finished(1)
-
-    def job_finished(self, code, status=None):
-        if self.process is None:
-            return
-        self.read_stdout()
-        self.read_stderr()
-        ok = code == 0 and self.result and self.result.get("ok")
-        message = (
-            "Completed"
-            if ok
-            else "Failed: " + (self.result or {}).get("error", f"Backend exited with code {code}")
-        )
-        self.log.appendPlainText(message)
-        self.job_log.write("\n" + message + "\n")
-        self.job_log.close()
-        self.queue_label.setText(message)
-        if self.current_history is not None:
-            import time
-
-            self.current_history.update(result=message, finished=time.time())
-            if "manual recovery" in message:
-                self.current_history["recovery"] = message
-            self.refresh_history()
-        self.process.deleteLater()
-        self.process = None
-        callback = self.job_callback
-        if ok and callback:
-            try:
-                callback(self.result.get("data"))
-            except Exception as error:
-                self.log.appendPlainText("Could not display job result: " + str(error))
-        if ok and self.result.get("data") is not None:
-            errors = (
-                self.result["data"].get("errors", [])
-                if isinstance(self.result["data"], dict)
-                else []
-            )
-            for error in errors:
-                self.log.appendPlainText(error)
-        self.inspection_cache.clear()
-        self.populate()
-        self.show_details()
-        self.refresh_actions()
-        QTimer.singleShot(0, self.start_next)
-
-    def clear_queue(self):
-        self.queue.clear()
-        self.refresh_pending_jobs()
-        self.cancel_button.setEnabled(False)
-        self.statusBar().showMessage("Queued jobs cleared; the current job will finish", 5000)
-
     def refresh_actions(self):
-        if self.loading_form:
+        if self.loading_form or not hasattr(self, "stop_job_button"):
             return
-        busy = self.process is not None
-        exists = bool(
-            self.selected and self.selected.executable and Path(self.selected.executable).is_file()
-        )
-        from .assets import state
+        from .status import action_states, install_problems, launchable
 
-        installed = bool(
-            self.selected
-            and (
-                (self.selected.target / ".optidx-files").is_file()
-                or any(
-                    state(root)["groups"]
-                    for root in {self.selected.target, Path(self.selected.root)}
-                )
-            )
+        game = self.selected
+        status = self.status_for(game) if game else None
+        info = self.inspection(game) if game else {}
+        chosen = {key for key, box in self.components.items() if box.isChecked()}
+        problems = (
+            install_problems(chosen, info.get("components", {}), self.helixsr_dll.text())
+            if game
+            else []
         )
-        info = self.inspection(self.selected) if self.selected else {}
-        supported = not info.get("apis") or bool(
-            set(info["apis"]).intersection(DIRECTX_INPUTS | {"DX9", "DX10", "OpenGL"})
+        states = action_states(
+            status,
+            info,
+            busy=self.process is not None,
+            chosen=chosen,
+            prune=self.prune_components.isChecked(),
+            problems=problems,
+            launchable=bool(game and launchable(game, status.profile)),
         )
-        self.install_button.setEnabled(
-            exists
-            and supported
-            and not busy
-            and (
-                any(box.isChecked() for box in self.components.values())
-                or self.prune_components.isChecked()
-            )
-        )
-        self.update_button.setEnabled(exists and supported and not busy and installed)
-        self.remove_button.setEnabled(exists and not busy and installed)
-        self.apply_button.setEnabled(exists and not busy)
-        self.save_button.setEnabled(bool(self.selected))
-        self.launch_button.setEnabled(
-            bool(
-                self.selected
-                and (
-                    self.selected.launch_uri
-                    or self.selected.store == "Bottles"
-                    or self.repository.preferences(self.selected).get("runner_command")
-                )
-            )
-            and not busy
-        )
-        self.batch_button.setEnabled(not busy)
+        self.current_status, self.current_problems, self.action_state = status, problems, states
+        for key, widget in (
+            ("install", self.install_button),
+            ("update", self.update_button),
+            ("remove", self.remove_button),
+            ("configure", self.apply_button),
+            ("save", self.save_button),
+            ("launch", self.launch_button),
+        ):
+            widget.setEnabled(states[key].enabled)
+        self.batch_button.setEnabled(self.process is None)
+        self.stop_job_button.setEnabled(self.process is not None and not self.cancel_requested)
         if hasattr(self, "features"):
             self.features.refresh_helix_action()
-        self.refresh_workflow_status()
-
-    def launch(self):
-        if self.selected and self.selected.launch_uri:
-            try:
-                open_game_uri(self.selected)
-            except OSError as error:
-                self.report_error(f"Could not start {self.selected.store}: {error}")
-        elif self.selected:
-            self.launch_manual()
-
-    def launch_manual(self):
-        game = self.selected
-        if game.id in self.launch_processes:
-            return
-        try:
-            if self.save_profile() is False:
-                return
-            from .launch import runner_command, profile_entry_arguments
-            import os
-
-            profile = self.repository.preferences(game)
-            command = runner_command(game, profile)
-            path = self.repository.directory / "profiles" / (game.id + ".json")
-            if game.store == "Bottles" and not profile.get("runner_command"):
-                profile["runner_kind"] = "bottles"
-                self.repository.save_preferences(game, profile)
-            process = QProcess(self)
-            process.setWorkingDirectory(str(game.target))
-            image = os.environ.get("APPIMAGE")
-            program = image or python_executable()
-            from .runtime import appimage_arguments
-
-            arguments = (
-                [*appimage_arguments(), "--launch-profile", str(path), "--", *command]
-                if image
-                else [
-                    "-B",
-                    *profile_entry_arguments(path),
-                    "--",
-                    *command,
-                ]
-            )
-            process.finished.connect(lambda code, status, g=game: self.launch_finished(g, code))
-            process.errorOccurred.connect(
-                lambda error, g=game: (
-                    self.launch_finished(g, 1)
-                    if error == QProcess.ProcessError.FailedToStart
-                    else None
-                )
-            )
-            process.readyReadStandardError.connect(
-                lambda p=process: self.log.appendPlainText(
-                    bytes(p.readAllStandardError()).decode(errors="replace")
-                )
-            )
-            self.launch_processes[game.id] = process
-            process.start(program, arguments)
-            self.populate()
-        except Exception as error:
-            self.report_error(str(error))
-
-    def launch_finished(self, game, code):
-        process = self.launch_processes.pop(game.id, None)
-        if process:
-            process.deleteLater()
-            self.log.appendPlainText(f"{game.title} exited with code {code}")
-            self.populate()
+        self.render_workflow_status()
 
     def open_directory(self, path):
         Path(path).mkdir(parents=True, exist_ok=True)
         open_url(QUrl.fromLocalFile(str(Path(path).resolve())).toString())
-
-    def check_all_updates(self):
-        from .assets import state
-
-        for game in self.games:
-            if game.available and (
-                (game.target / ".optidx-files").is_file()
-                or any(state(r)["groups"] for r in {game.target, Path(game.root)})
-            ):
-                self.enqueue_feature("check_updates", game=game)
-
-    def configure_services(self):
-        from .storage import read_json
-
-        self.service_settings = read_json(self.repository.directory / "settings.json", {})
-        if not hasattr(self, "update_timer"):
-            self.update_timer = QTimer(self)
-            self.update_timer.timeout.connect(self.check_all_updates)
-            self.watcher = QFileSystemWatcher(self)
-            self.watcher.directoryChanged.connect(self.downloads_changed)
-            self.watch_timer = QTimer(self)
-            self.watch_timer.setSingleShot(True)
-            self.watch_timer.timeout.connect(self.watch_ready)
-            self.pending_downloads = {}
-            self.tray = QSystemTrayIcon(QIcon(str(Path(__file__).parent / "assets/app.svg")), self)
-            menu = QMenu(self)
-            show = menu.addAction("Open OptiDX Desktop")
-            show.triggered.connect(lambda: (self.show(), self.raise_(), self.activateWindow()))
-            menu.addAction("Check updates").triggered.connect(self.check_all_updates)
-            menu.addAction("Quit").triggered.connect(self.quit_app)
-            self.tray.setContextMenu(menu)
-            self.tray.activated.connect(
-                lambda reason: (
-                    self.show() if reason == QSystemTrayIcon.ActivationReason.Trigger else None
-                )
-            )
-        if self.service_settings.get("background_checks"):
-            self.update_timer.start(4 * 3600 * 1000)
-        else:
-            self.update_timer.stop()
-        if self.watcher.directories():
-            self.watcher.removePaths(self.watcher.directories())
-        folder = Path(self.service_settings.get("watch_folder", str(Path.home() / "Downloads")))
-        self.watch_seen = (
-            {
-                str(p): (p.stat().st_size, p.stat().st_mtime_ns)
-                for p in folder.glob("*")
-                if p.is_file()
-            }
-            if folder.is_dir()
-            else {}
-        )
-        if self.service_settings.get("watch_downloads") and folder.is_dir():
-            self.watcher.addPath(str(folder))
-        if self.service_settings.get("tray") and QSystemTrayIcon.isSystemTrayAvailable():
-            self.tray.show()
-        else:
-            self.tray.hide()
-
-    def downloads_changed(self, directory):
-        self.pending_downloads.clear()
-        for path in Path(directory).glob("*"):
-            if path.is_file() and path.suffix.lower() in {
-                ".addon",
-                ".addon32",
-                ".addon64",
-                ".ini",
-                ".zip",
-                ".7z",
-            }:
-                record = (path.stat().st_size, path.stat().st_mtime_ns)
-                if self.watch_seen.get(str(path)) != record:
-                    self.pending_downloads[str(path)] = record
-        self.watch_timer.start(3000)
-
-    def watch_ready(self):
-        for name, record in self.pending_downloads.copy().items():
-            path = Path(name)
-            if path.is_file() and (path.stat().st_size, path.stat().st_mtime_ns) == record:
-                self.watch_seen[name] = record
-                self.log.appendPlainText("New mod/preset download available to import: " + name)
-                if self.tray.isVisible():
-                    self.tray.showMessage(
-                        "Mod download detected", path.name + " — use Import addon / preset / shader"
-                    )
-            else:
-                self.watch_timer.start(3000)
 
     def quit_app(self):
         self.quitting = True
@@ -1294,6 +981,9 @@ class MainWindow(WorkflowMixin, QMainWindow):
             open_url(QUrl.fromLocalFile(str(self.selected.target)).toString())
 
     def copy_launch_options(self):
+        from .runtime import ensure_launcher
+
+        ensure_launcher()
         QApplication.clipboard().setText(launch_options(self.profile()))
         self.statusBar().showMessage(
             "Steam launch options copied. AppImage Heroic wrapper: the AppImage with --backend in its arguments.",
@@ -1337,11 +1027,8 @@ class MainWindow(WorkflowMixin, QMainWindow):
         if not self.quitting and hasattr(self, "tray") and self.tray.isVisible():
             self.hide()
             event.ignore()
-        elif (
-            self.process is not None
-            or self.launch_processes
-            or (self.scanner is not None and self.scanner.isRunning())
-        ):
+        elif self.process is not None or (self.scanner is not None and self.scanner.isRunning()):
+            # Games run detached from this window and keep running after it closes.
             self.statusBar().showMessage(
                 "Wait for the current operation to finish before closing", 5000
             )

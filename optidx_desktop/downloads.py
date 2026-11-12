@@ -23,12 +23,34 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def file_sha(path):
+    """Stream a file's SHA-256 instead of loading large payloads into memory."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def safe_name(name):
     name = name.replace("\\", "/")
     path = PurePosixPath(name)
     if not name or name.startswith("/") or ".." in path.parts or re.match(r"^[A-Za-z]:", name):
         raise ValueError("Unsafe archive path: " + name)
     return str(path)
+
+
+def curl_auth_config(url):
+    """curl --config text carrying the optional GitHub token.
+
+    The token is sent on curl's stdin so it never appears in process arguments.
+    """
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if urlparse(url).hostname != "api.github.com" or not token:
+        return ""
+    if any(character in token for character in '"\\\r\n'):
+        raise ValueError("GITHUB_TOKEN contains unsupported characters")
+    return f'header = "Authorization: Bearer {token}"\n'
 
 
 class Client:
@@ -41,19 +63,18 @@ class Client:
             raise ValueError("Download URLs must use HTTPS")
         path = self.directory / sha(url.encode())
         record = read_json(path.with_suffix(".json"), {}, strict=False)
-        if path.is_file() and not refresh and record.get("sha256") == sha(path.read_bytes()):
-            payload = path.read_bytes()
+        if path.is_file() and not refresh and record.get("sha256") == (actual := file_sha(path)):
+            # Mark the entry as used so age-based cache cleanup keeps it.
+            os.utime(path)
         else:
             fd, temporary = tempfile.mkstemp(dir=self.directory)
             os.close(fd)
             try:
-                auth = []
-                if urlparse(url).hostname == "api.github.com" and os.environ.get("GITHUB_TOKEN"):
-                    auth = ["-H", "Authorization: Bearer " + os.environ["GITHUB_TOKEN"]]
                 result = subprocess.run(
                     [
                         "curl",
-                        *auth,
+                        "--config",
+                        "-",
                         "-fL",
                         "--proto",
                         "=https",
@@ -77,6 +98,7 @@ class Client:
                         temporary,
                         url,
                     ],
+                    input=curl_auth_config(url),
                     capture_output=True,
                     text=True,
                 )
@@ -84,19 +106,19 @@ class Client:
                     raise OSError(
                         f"Download failed (curl exit {result.returncode}) for {urlparse(url).hostname}"
                     )
-                payload = Path(temporary).read_bytes()
-                if len(payload) > LIMIT:
+                if Path(temporary).stat().st_size > LIMIT:
                     raise ValueError("Download exceeds size limit")
-                if digest and sha(payload) != digest.removeprefix("sha256:").lower():
+                actual = file_sha(temporary)
+                if digest and actual != digest.removeprefix("sha256:").lower():
                     raise ValueError("Download SHA-256 mismatch")
                 os.replace(temporary, path)
                 atomic_json(
                     path.with_suffix(".json"),
-                    {"url": url, "sha256": sha(payload), "time": time.time()},
+                    {"url": url, "sha256": actual, "time": time.time()},
                 )
             finally:
                 Path(temporary).unlink(missing_ok=True)
-        if digest and sha(payload) != digest.removeprefix("sha256:").lower():
+        if digest and actual != digest.removeprefix("sha256:").lower():
             raise ValueError("Download SHA-256 mismatch")
         return path
 
@@ -110,7 +132,7 @@ class Client:
             )
         except OSError:
             # Only metadata may use a stale cache; payload failures stay failures.
-            if path.is_file() and record.get("sha256") == sha(path.read_bytes()):
+            if path.is_file() and record.get("sha256") == file_sha(path):
                 warnings.warn(
                     "Using verified stale metadata for " + urlparse(url).hostname, RuntimeWarning
                 )

@@ -39,6 +39,7 @@ class WorkflowMixin:
         for record in self.history:
             if record["result"] == "Running":
                 record["result"] = "Interrupted; inspect log and backups before retrying"
+                record["recovery_state"] = "interrupted"
         self.workspace = read_json(self.repository.directory / "workspace.json", {})
 
     def setup_workflow(self):
@@ -239,14 +240,15 @@ class WorkflowMixin:
     def ordered_games(self, profiles=None, updates=None):
         if not hasattr(self, "sort"):
             return self.games
+        if profiles is None or updates is None:
+            from .status import game_status
+
+            statuses = {game.id: game_status(game, self.repository) for game in self.games}
+            profiles = {key: status.profile for key, status in statuses.items()}
+            updates = {key: status.update for key, status in statuses.items()}
 
         def key(game):
-            name = (
-                (
-                    profiles[game.id] if profiles is not None else self.repository.preferences(game)
-                ).get("display_name")
-                or game.title
-            ).casefold()
+            name = (profiles[game.id].get("display_name") or game.title).casefold()
             if self.sort.currentText() == "Recently managed":
                 return (
                     -max(
@@ -256,110 +258,57 @@ class WorkflowMixin:
                 )
             if self.sort.currentText() == "Updates first":
                 return (
-                    not (
-                        updates[game.id]
-                        if updates is not None
-                        else read_json(
-                            self.repository.directory / "updates" / (game.id + ".json"), {}
-                        )
-                    ).get("update_available"),
+                    not updates[game.id].get("update_available"),
                     name,
                 )
             return (name,)
 
         return sorted(self.games, key=key)
 
-    def dependency_problems(self, info):
-        chosen = {k for k, w in self.components.items() if w.isChecked()}
-        found = info.get("components", {})
-        problems = []
-        for component, dependency, label in [
-            ("renodx", "reshade", "ReShade"),
-            ("luma", "reshade", "ReShade"),
-            ("helixsr", "optiscaler", "OptiScaler"),
-        ]:
-            installed_label = {"reshade": "ReShade", "optiscaler": "OptiScaler"}[dependency]
-            if component in chosen and dependency not in chosen and not found.get(installed_label):
-                problems.append(
-                    f"{self.components[component].text()} requires selected or installed {label}"
-                )
-        if "helixsr" in chosen and hasattr(self, "helixsr_dll"):
-            path = Path(self.helixsr_dll.text()).expanduser()
-            if not self.helixsr_dll.text().strip() or not path.is_file():
-                problems.append("Choose the locally built HelixSR FSR DLL")
-        return problems
-
     def refresh_workflow_status(self):
+        # Availability is computed by the Qt-free status model in refresh_actions.
+        self.refresh_actions()
+
+    def render_workflow_status(self):
         if not hasattr(self, "action_hint"):
             return
+        states = self.action_state
+        problems = self.current_problems
         info = self.inspection(self.selected) if self.selected else {}
-        problems = self.dependency_problems(info)
-        reason = (
-            "Choose a game."
-            if not self.selected
-            else (
-                "Another operation is running."
-                if self.process
-                else (
-                    "Select an existing executable in Installation → diagnostics."
-                    if not info.get("executable_exists")
-                    else "; ".join(problems)
-                )
-            )
-        )
-        if not reason and not self.install_button.isEnabled():
-            reason = "Select a component or use a supported graphics API."
+        reason = states["install"].reason
         hints = [reason] if reason else []
-        if not self.update_button.isEnabled():
-            hints.append("Update unavailable: " + (reason or "no managed installation found."))
-        if not self.remove_button.isEnabled():
-            hints.append("Removal unavailable: " + (reason or "no managed installation found."))
-        if not self.launch_button.isEnabled():
-            hints.append(
-                "Launch unavailable: " + (reason or "configure a runner in Launch options.")
-            )
-        self.action_hint.setText("\n".join(hints))
+        for key, label in (("update", "Update"), ("remove", "Removal"), ("launch", "Launch")):
+            if not states[key].enabled:
+                hints.append(f"{label} unavailable: {states[key].reason}")
+        if not states["save"].enabled and self.selected:
+            hints.append(states["save"].reason)
+        self.action_hint.setText("\n".join(dict.fromkeys(hints)))
         self.install_button.setToolTip(reason or "Install the selected core components.")
-        if problems:
-            self.install_button.setEnabled(False)
-        self.update_button.setToolTip(
-            "Update the managed setup."
-            if self.update_button.isEnabled()
-            else reason or "No managed installation found."
-        )
+        self.update_button.setToolTip(states["update"].reason or "Update the managed setup.")
         self.remove_button.setToolTip(
-            "Restore originals and remove managed files."
-            if self.remove_button.isEnabled()
-            else reason or "No managed installation found."
+            states["remove"].reason or "Restore originals and remove managed files."
         )
         self.launch_button.setToolTip(
-            "Launch with the route shown above."
-            if self.launch_button.isEnabled()
-            else reason or "Configure a runner in Launch options."
+            states["launch"].reason or "Launch with the route shown above."
         )
-        updates = read_json(
-            self.repository.directory
-            / "updates"
-            / ((self.selected.id if self.selected else "") + ".json"),
-            {},
-        )
+        updates = self.current_status.update if self.current_status else {}
         available = {r["component"] for r in updates.get("components", []) if r.get("update")}
-        from .backend import COMPONENT_LABELS
+        from .components import COMPONENT_LABELS, COMPONENTS
 
         for key, box in self.components.items():
             statuses = [
                 "Selected" if box.isChecked() else "Unselected",
                 (
                     "Detected"
-                    if info.get("components", {}).get(
-                        "AMD FSR" if key == "amd_fsr" else COMPONENT_LABELS[key]
-                    )
+                    if info.get("components", {}).get(COMPONENTS[key].detected)
                     else "Not detected"
                 ),
             ]
             if key in available:
                 statuses.append("Update available")
-            if key in {"renodx", "luma", "helixsr"} and any(box.text() in p for p in problems):
+            if key in {"renodx", "luma", "helixsr"} and any(
+                p.startswith(COMPONENT_LABELS[key] + " requires") for p in problems
+            ):
                 statuses.append("Dependency missing")
             if key in {"helixsr", "amd_fsr"}:
                 opposite = "amd_fsr" if key == "helixsr" else "helixsr"
@@ -375,11 +324,9 @@ class WorkflowMixin:
                 else "Bottles CLI" if game.store == "Bottles" else "saved manual runner"
             )
             text = f"Launches through {route}."
-            if (
-                not game.launch_uri
-                and game.store != "Bottles"
-                and not self.repository.preferences(game).get("runner_command")
-            ):
+            from .status import launchable
+
+            if not launchable(game, self.current_status.profile):
                 text = "Manual launch: configure a runner in Launch options."
             if game.launch_uri:
                 text += " Managed environment/HDR settings require the copied profile wrapper in your launcher."
@@ -509,8 +456,6 @@ class WorkflowMixin:
             self.enqueue_feature("restore_snapshot", {"snapshot": str(folder)})
 
     def batch_update(self):
-        from .assets import state
-
         dialog = QDialog(self)
         dialog.setWindowTitle("Review bulk updates")
         dialog.resize(740, 500)
@@ -523,32 +468,33 @@ class WorkflowMixin:
         candidates = []
         from .backend import COMPONENT_LABELS, selected_components
 
+        from .status import game_status
+
         for game in self.ordered_games():
-            profile = self.repository.preferences(game)
-            installed = (game.target / ".optidx-files").is_file() or any(
-                state(root)["groups"] for root in {game.target, Path(game.root)}
-            )
+            status = game_status(game, self.repository)
+            profile = status.profile
             reason = (
                 "Drive unavailable"
                 if not game.available
                 else (
-                    "No managed installation"
-                    if not installed
-                    else "Excluded in profile" if not profile.get("include_updates", True) else ""
+                    "Needs attention: " + status.errors[0]
+                    if status.errors
+                    else (
+                        "No managed installation"
+                        if not status.installed
+                        else (
+                            "Excluded in profile"
+                            if not profile.get("include_updates", True)
+                            else ""
+                        )
+                    )
                 )
             )
-            extras = (
-                sorted(
-                    {
-                        group
-                        for root in {game.target, Path(game.root)}
-                        for group in state(root)["groups"]
-                    }
-                )
-                if game.available
-                else []
-            )
-            components = [COMPONENT_LABELS[k] for k in selected_components(profile)]
+            extras = status.group_names()
+            try:
+                components = [COMPONENT_LABELS[k] for k in selected_components(profile)]
+            except ValueError as error:
+                components, reason = [], reason or str(error)
             item = QListWidgetItem(
                 game.title
                 + "\n"

@@ -1,0 +1,19 @@
+name: Source checks
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0 p7zip-full
+      - run: python -m pip install -r requirements.txt black==25.1.0 ruff==0.11.13
+      - run: black --check optidx_desktop backend tests packaging launcher.py
+      - run: ruff check optidx_desktop backend tests packaging launcher.py
+      - run: python -B -m unittest discover -s tests -q
+      - run: ./run.sh --data-dir /tmp/optidx-ci-preview --screenshot /tmp/optidx-ci.png

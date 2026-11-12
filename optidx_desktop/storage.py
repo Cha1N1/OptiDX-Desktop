@@ -5,6 +5,8 @@ import tempfile
 import time
 import warnings
 
+from .errors import CorruptRecord
+
 
 def data_dir():
     return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "optidx-desktop"
@@ -44,7 +46,7 @@ def read_json(path, default=None, *, strict=True):
         return default
     except (OSError, ValueError) as error:
         if strict:
-            raise ValueError(f"Cannot read JSON record {path}: {error}") from error
+            raise CorruptRecord(f"Cannot read JSON record {path}: {error}") from error
         # Only disposable caches may opt into recovery. Never discard evidence.
         if isinstance(error, ValueError):
             saved = path.with_name(path.name + f".corrupt-{time.time_ns()}")

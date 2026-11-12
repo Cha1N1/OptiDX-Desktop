@@ -81,6 +81,13 @@ def main():
         return 1
     from .runtime import gui_arguments
 
+    if not arguments.screenshot:
+        from .runtime import ensure_launcher
+
+        try:
+            ensure_launcher()
+        except OSError as error:
+            print(f"Could not update the stable launcher: {error}", file=sys.stderr)
     app = QApplication(gui_arguments(sys.argv[0]))
     app.setApplicationName("OptiDX Desktop")
     window = MainWindow(repository, auto_scan=not arguments.screenshot)

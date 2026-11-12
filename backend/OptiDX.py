@@ -384,18 +384,24 @@ def fetch(url, out, tries=3):
     env = clean_env()
     part = out + ".part"
     for i in range(1, tries + 1):
-        auth = []
-        token = os.environ.get("GITHUB_TOKEN")
-        if token and url.startswith("https://api.github.com/"):
-            auth = ["-H", f"Authorization: Bearer {token}"]
+        # Pass any token through curl's stdin config, not the visible argument list.
+        auth = ""
+        token = os.environ.get("GITHUB_TOKEN", "")
+        if (
+            token
+            and url.startswith("https://api.github.com/")
+            and not any(c in token for c in '"\\\r\n')
+        ):
+            auth = f'header = "Authorization: Bearer {token}"\n'
         cmd = [
             "curl",
+            "--config",
+            "-",
             "-fsSL",
             "--proto",
             "=https",
             "--proto-redir",
             "=https",
-            *auth,
             "--connect-timeout",
             "15",
             "--speed-limit",
@@ -411,7 +417,12 @@ def fetch(url, out, tries=3):
         completed = False
         try:
             result = subprocess.run(
-                cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                cmd,
+                env=env,
+                input=auth,
+                text=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             completed = result.returncode == 0
         except OSError:
@@ -2863,7 +2874,11 @@ def install_selected_components():
                 owners["optiscaler"].clear()
         from optidx_desktop import assets
 
-        for component, group in (("reshade", "channel:reshade"), ("amd_fsr", "backend:amd_fsr")):
+        from optidx_desktop.components import ledger_groups
+
+        for component, group in ledger_groups():
+            if component == "optiscaler":
+                continue
             if component not in selected and group in assets.state(Path.cwd())["groups"]:
                 paths = set(assets.state(Path.cwd())["groups"][group]["files"])
                 assets.remove(Path.cwd(), group)
