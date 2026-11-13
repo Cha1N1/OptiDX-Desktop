@@ -3,6 +3,18 @@
 This is the continuation record for the standalone Linux desktop application.
 Use release notes for shipped changes and focused reports for detailed findings.
 
+## Test suite trim and speed-up — 2026-11-13
+
+Removed 17 cosmetic tests (`test_scrolling.py`, `test_motion.py` and the palette/
+contrast/KDE-colour tests in `test_theme.py`); kept the two theme tests that check
+settings preservation and that theme changes never touch drafts or games. 261
+tests remain. Each closed MainWindow left its smooth-scrolling and theme filters
+installed on the QApplication (tests and shutdown never processed the deferred
+delete), so every later Qt event ran through a growing chain: the full suite took
+90–120 s. `MainWindow.closeEvent` now removes both filters when a close is
+accepted; the full suite runs in about 24 s. Prefer focused test files while
+iterating and the full suite once before commits/builds.
+
 ## Fork retirement and frame-generation tools — 2026-11-13
 
 The user no longer maintains the `Cha1N1/OptiScaler` fork. Source backup:

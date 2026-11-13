@@ -1034,4 +1034,10 @@ class MainWindow(
             )
             event.ignore()
         else:
+            # App-wide filters would otherwise outlive this window until Qt
+            # destroys it, slowing every event and touching half-deleted popups.
+            from PySide6.QtWidgets import QApplication
+
+            self.smooth_scrolling.detach()
+            QApplication.instance().removeEventFilter(self.theme)
             event.accept()

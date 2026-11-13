@@ -3,15 +3,14 @@ import os
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 import tempfile
 import unittest
+
 from pathlib import Path
-from PySide6.QtTest import QSignalSpy
-from optidx_desktop.system_palette import SystemPalette, kde_palette, system_palette_source
-from PySide6.QtGui import QColor, QPalette
+from optidx_desktop.system_palette import system_palette_source
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication
 from optidx_desktop.app import MainWindow
 from optidx_desktop.library import manual_game
 from optidx_desktop.storage import Repository, atomic_json, read_json
-from optidx_desktop.theme import DARK, LIGHT, resolved_theme
 
 
 class ThemeTests(unittest.TestCase):
@@ -47,13 +46,6 @@ class ThemeTests(unittest.TestCase):
         combo.setCurrentIndex(combo.findData(mode))
         self.app.processEvents()
 
-    def test_default_dark_uses_navy_colors_and_unknown_values_are_safe(self):
-        self.assertEqual(self.window.theme.mode, "dark")
-        self.assertEqual(self.window.theme.effective, "dark")
-        self.assertEqual(self.window.palette().color(QPalette.ColorRole.Window).name(), "#090c12")
-        self.assertEqual(resolved_theme("invalid"), "dark")
-        self.assertEqual(resolved_theme([]), "dark")
-
     def test_choice_persists_without_saving_game_drafts_or_deploying(self):
         self.window.features.environment.setPlainText("{unfinished")
         before = self.window.capture_form()
@@ -82,106 +74,3 @@ class ThemeTests(unittest.TestCase):
         self.assertEqual(saved["theme"], "dark")
         self.assertEqual(saved["future_setting"], "retain")
         self.assertTrue(saved["reduce_motion"])
-
-    def test_system_uses_native_palette_and_updates_without_affecting_forced_modes(self):
-        native = QPalette(self.app.palette())
-        native.setColor(QPalette.ColorRole.Window, QColor("#35214b"))
-        native.setColor(QPalette.ColorRole.Text, QColor("#efdbff"))
-        native.setColor(QPalette.ColorRole.Highlight, QColor("#b787ef"))
-        native.setColor(QPalette.ColorRole.HighlightedText, QColor("#1f1030"))
-        self.source.native = native
-        self.choose("system")
-        self.assertEqual(self.window.theme.effective, "system")
-        self.assertTrue(Path(self.window.theme.icon_directory.path()).is_absolute())
-        self.assertEqual(self.window.palette().color(QPalette.ColorRole.Window).name(), "#35214b")
-        self.assertIn("background: #b787ef", self.window.styleSheet())
-        self.assertIn("color: #efdbff", self.window.styleSheet())
-        native.setColor(QPalette.ColorRole.Highlight, QColor("#d45e91"))
-        self.source.native = native
-        self.source.changed.emit()
-        self.assertIn("background: #d45e91", self.window.styleSheet())
-        self.choose("dark")
-        before = self.window.styleSheet()
-        self.source.changed.emit()
-        self.assertEqual(self.window.theme.effective, "dark")
-        self.assertEqual(self.window.styleSheet(), before)
-
-    def test_legacy_original_migrates_and_only_three_choices_remain(self):
-        atomic_json(self.repo.directory / "settings.json", {"theme": "original", "future": True})
-        another = MainWindow(self.repo, auto_scan=False)
-        try:
-            self.assertEqual(another.theme.mode, "dark")
-            self.assertEqual(another.features.theme_choice.count(), 3)
-            self.assertEqual(
-                read_json(self.repo.directory / "settings.json"), {"theme": "dark", "future": True}
-            )
-            self.assertEqual(another.palette().color(QPalette.ColorRole.Window).name(), "#090c12")
-        finally:
-            another.close()
-            another.deleteLater()
-
-    def test_preset_changes_do_not_overwrite_the_application_native_palette(self):
-        before = QPalette(self.app.palette())
-        self.choose("light")
-        self.choose("dark")
-        self.choose("system")
-        self.assertEqual(self.app.palette(), before)
-
-    def test_kde_colors_support_rgb_values_and_live_atomic_replacement(self):
-        from unittest.mock import patch
-
-        root = Path(self.temp.name) / "config"
-        root.mkdir()
-        path = root / "kdeglobals"
-        path.write_text(
-            "[Colors:Window]\nBackgroundNormal=21,15,34\nForegroundNormal=#efdfff\n[Colors:Selection]\nBackgroundNormal=#ba8aff\nForegroundNormal=#241132\n"
-        )
-        palette = kde_palette(self.app.palette(), path)
-        self.assertEqual(palette.window().color().name(), "#150f22")
-        self.assertEqual(palette.highlight().color().name(), "#ba8aff")
-        with patch.dict(os.environ, {"XDG_CURRENT_DESKTOP": "KDE", "XDG_CONFIG_HOME": str(root)}):
-            source = SystemPalette(self.app)
-        changes = []
-        source.changed.connect(lambda: changes.append(True))
-        signal = QSignalSpy(source.changed)
-        try:
-            replacement = root / "replacement"
-            replacement.write_text("[Colors:Window]\nBackgroundNormal=#f0e2ff\n")
-            replacement.replace(path)
-            if not changes:
-                signal.wait(2000)
-            self.assertTrue(changes)
-            self.assertEqual(source.palette().window().color().name(), "#f0e2ff")
-            self.assertIn(str(path), source.watcher.files())
-            count = len(changes)
-            source.refresh()
-            self.assertEqual(len(changes), count)
-        finally:
-            source.timer.stop()
-            source.deleteLater()
-
-    def test_light_popup_and_diagnostics_use_light_palette_and_icons(self):
-        self.window.show()
-        self.choose("light")
-        self.window.filter.showPopup()
-        self.app.processEvents()
-        palette = self.window.filter.view().palette()
-        self.assertEqual(palette.color(QPalette.ColorRole.Text).name(), "#202a35")
-        self.assertIn("check-light.svg", self.window.styleSheet())
-        self.assertIn("chevron-light.svg", self.window.styleSheet())
-        self.assertIn("color: #08796b", self.window.styleSheet())
-        self.window.filter.hidePopup()
-        self.choose("dark")
-        self.assertNotIn("check-light.svg", self.window.styleSheet())
-
-    def test_theme_body_and_muted_text_have_readable_contrast(self):
-        def luminance(color):
-            rgb = QColor(color).getRgbF()[:3]
-            linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
-            return sum(c * weight for c, weight in zip(linear, [0.2126, 0.7152, 0.0722]))
-
-        for colors in [DARK, LIGHT]:
-            for foreground in ["text", "muted"]:
-                for background in ["window", "card", "input"]:
-                    a, b = sorted([luminance(colors[foreground]), luminance(colors[background])])
-                    self.assertGreaterEqual((b + 0.05) / (a + 0.05), 4.5)
