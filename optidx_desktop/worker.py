@@ -160,6 +160,7 @@ def _run_job(request, directory=None):
 
                         restore_loader_settings(game)
                         (game.target / ".optidx-desktop-versions.json").unlink(missing_ok=True)
+                        (game.target / ".optidx-desktop-framegen.json").unlink(missing_ok=True)
                         from .features import remove_all_assets
 
                         remove_all_assets(game)

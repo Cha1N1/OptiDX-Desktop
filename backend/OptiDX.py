@@ -80,7 +80,7 @@ UE_RENODX_VALUES = {
     },
 }
 
-REPO_OPTISCALER = "Cha1N1/OptiScaler"
+REPO_OPTISCALER = "optiscaler/OptiScaler-nightly"
 REPO_LUMA = "Filoppi/Luma-Framework"
 REPO_DLSS = "Cha1N1/dlss-enabler-bleeding-edge"
 
@@ -2368,7 +2368,7 @@ def migrate_reshade(directory="."):
     if not supported:
         warn(
             "Keeping ReShade64.dll: run OptiDX with --update after installing "
-            "the patched OptiScaler nightly to enable the WGL fix"
+            "a current OptiScaler nightly to enable the WGL fix"
         )
         return False
 

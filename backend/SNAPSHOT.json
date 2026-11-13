@@ -3,7 +3,7 @@
   "version": "2.1.2-desktop.1",
   "upstream_version": "2.1.2",
   "upstream_sha256": "05d1b72cfdb9aba06baed79b0c340a910b73db02df80fadda0eb26bd86c785a1",
-  "sha256": "d80495ef5e4683dbf13710e1ec13b520edfea4083feb0898ea1761d7bc6b77e5",
+  "sha256": "0b2a4d8a3b01b0f0b687f5ecb2073ec211db5ca0e17e3b13163a0327cd019fca",
   "changes": [
     "Independent component selection and ownership",
     "Official Cyboman lossy archive downloads",
@@ -20,6 +20,7 @@
     "Consistent Black formatting; scoped Desktop backend contexts restore working directory and environment",
     "Correct bundled CLI help to use the actual OptiDX.py filename",
     "Send the optional GitHub token through curl's stdin configuration instead of process arguments",
-    "Prune unselected components through every Desktop ledger group declared by the component registry"
+    "Prune unselected components through every Desktop ledger group declared by the component registry",
+    "Default OptiScaler downloads to upstream optiscaler/OptiScaler-nightly instead of the retired Cha1N1/OptiScaler fork"
   ]
 }

@@ -112,54 +112,74 @@ def install_reshade(game, repository, preferences):
     return result
 
 
+UPSTREAM_STABLE = "optiscaler/OptiScaler"
+UPSTREAM_NIGHTLY = "optiscaler/OptiScaler-nightly"
+# The Cha1N1/OptiScaler fork is no longer maintained; its MFG/XeFG additions are
+# optional tools and its INI defaults are the built-in OptiDX preset.
+RETIRED_OPTISCALER_REPOSITORIES = {"cha1n1/optiscaler"}
+
+
+def optiscaler_source(preferences, recorded=None):
+    """(repository, release channel) for OptiScaler downloads and update checks.
+
+    ``recorded`` is the installed version record; its repository is reused only
+    for the same channel. Retired fork repositories resolve to upstream.
+    """
+    recorded = recorded or {}
+    channel = preferences.get("optiscaler_channel") or recorded.get("channel") or "nightly"
+    if channel == "upstream_nightly":
+        return UPSTREAM_NIGHTLY, "nightly"
+    default = UPSTREAM_STABLE if channel == "stable" else UPSTREAM_NIGHTLY
+    repo = (
+        preferences.get("optiscaler_repo")
+        or (recorded.get("repository") if recorded.get("channel") == channel else "")
+        or default
+    )
+    if repo.casefold() in RETIRED_OPTISCALER_REPOSITORIES:
+        repo = default
+    return repo, channel
+
+
 def configure_backend(module, game, repository, preferences):
     """Override independent install functions while keeping OptiDX ownership."""
-    if preferences.get("optiscaler_channel"):
-        channel = preferences["optiscaler_channel"]
-        upstream = channel == "upstream_nightly"
-        if upstream:
-            channel = "nightly"
-        if channel == "custom":
-            path = Path(preferences.get("optiscaler_custom", "")).expanduser().resolve()
-            if not path.is_file():
-                raise ValueError("Select an OptiScaler archive for the Custom channel")
-            archive_files(path)
-            module.optiscaler_urls = lambda: [path.as_uri()]
-            original = module.download_file
+    # Desktop always resolves the OptiScaler release itself, so the version
+    # record names the repository actually used.
+    repo, channel = optiscaler_source(preferences)
+    if preferences.get("optiscaler_channel") == "custom":
+        path = Path(preferences.get("optiscaler_custom", "")).expanduser().resolve()
+        if not path.is_file():
+            raise ValueError("Select an OptiScaler archive for the Custom channel")
+        archive_files(path)
+        module.optiscaler_urls = lambda: [path.as_uri()]
+        original = module.download_file
 
-            def local_download(url, destination, tries=2):
-                if urlparse(url).scheme == "file":
-                    shutil.copyfile(unquote(urlparse(url).path), destination)
-                    return True
-                return original(url, destination, tries)
+        def local_download(url, destination, tries=2):
+            if urlparse(url).scheme == "file":
+                shutil.copyfile(unquote(urlparse(url).path), destination)
+                return True
+            return original(url, destination, tries)
 
-            module.download_file = local_download
-        else:
-            repo = (
-                "optiscaler/OptiScaler-nightly"
-                if upstream
-                else preferences.get("optiscaler_repo")
-                or ("optiscaler/OptiScaler" if channel == "stable" else module.REPO_OPTISCALER)
-            )
-            selected_release = []
+        module.download_file = local_download
+    else:
+        selected_release = []
 
-            def urls():
-                if not selected_release:
-                    selected_release.append(
-                        Client(repository.directory).release_asset(
-                            repo,
-                            r"\.7z$",
-                            channel,
-                            preferences.get("optiscaler_tag", ""),
-                            module.FORCE_UPDATE,
-                        )
+        def urls():
+            if not selected_release:
+                selected_release.append(
+                    Client(repository.directory).release_asset(
+                        repo,
+                        r"\.7z$",
+                        channel,
+                        preferences.get("optiscaler_tag", ""),
+                        module.FORCE_UPDATE,
                     )
-                release = selected_release[0]
-                module.register_asset(release)
-                record_version(game, "optiscaler", {**release, "channel": channel})
-                return [release["browser_download_url"]]
+                )
+            release = selected_release[0]
+            module.register_asset(release)
+            record_version(game, "optiscaler", {**release, "channel": channel})
+            return [release["browser_download_url"]]
 
-            module.optiscaler_urls = urls
+        module.optiscaler_urls = urls
     bits = int(preferences.get("bits_override") or inspect_game(game)["bits"] or 64)
     original_payload = module.fetch_payload
 
@@ -314,32 +334,7 @@ def record_installed_versions(module, game, preferences):
 
     versions = read_json(game.target / ".optidx-desktop-versions.json", {})
     selected = module.COMPONENT_SELECTION or set()
-    if "optiscaler" in selected and not preferences.get("optiscaler_channel"):
-        data = read_json(module.CACHE_DIR / "optiscaler_nightly.json", {})
-        if data:
-            version = file_version(game.target / module.QUIRK_OPTISCALER_DLL)
-            versions["optiscaler"] = {
-                "version": data.get("tag_name"),
-                "binary_version": version,
-                "repository": module.REPO_OPTISCALER,
-                "channel": "nightly",
-                "id": next(
-                    (
-                        a.get("id")
-                        for a in data.get("assets", [])
-                        if a.get("name", "").endswith(".7z")
-                    ),
-                    None,
-                ),
-                "updated_at": next(
-                    (
-                        a.get("updated_at")
-                        for a in data.get("assets", [])
-                        if a.get("name", "").endswith(".7z")
-                    ),
-                    None,
-                ),
-            }
+    # OptiScaler's release is recorded by configure_backend when it resolves it.
     for key, files in [
         ("reshade", [module.RESHADE_DLL_NAME]),
         ("renodx", list(game.target.glob("renodx-*.addon*"))),

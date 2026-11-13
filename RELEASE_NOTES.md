@@ -1,5 +1,16 @@
 # Unreleased
 
+- **Upstream OptiScaler:** Nightly and the default source now download
+  `optiscaler/OptiScaler-nightly`. The `Cha1N1/OptiScaler` fork is retired;
+  recorded fork installs and profiles move to upstream on their next update.
+- **OptiDX configuration preset:** the fork's INI defaults (FFX upscaler in DX12,
+  DLSS FG inputs to XeFG, up to 6X) are a built-in preset that changes only
+  those keys.
+- **Frame-generation tools:** MFG Unlocker (OptiScaler plugin) and the XeMFG XMX,
+  dlssg-to-xefg and ANR FG custom DLSSG providers install, update and remove
+  independently under Optional tools. Providers set the FG replacement on first
+  install and put back the previous choice on removal.
+
 - **Startup resilience:** a corrupt profile or ownership record no longer stops the
   app from opening. The affected game shows "Needs attention", its management
   actions and profile saving stay disabled with the reason, and the record is

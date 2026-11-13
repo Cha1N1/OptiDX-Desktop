@@ -26,6 +26,7 @@ both use `selection_problems`; backend pruning iterates `ledger_groups()`.
 | HelixSR (direct) | Legacy `install_helixsr` | Separate `.optidx-helixsr.json` + `.bin` backup |
 | RenoDX / Luma | Legacy wiki/mirror matching | Legacy manifest only |
 | d3dcompiler_47, UE HDR state | Legacy | Legacy manifest only |
+| MFG Unlocker, XeMFG XMX, dlssg-to-xefg, ANR FG | Desktop `framegen_tools` (optional tools, not components) | Ledger `extra:<key>`; FG INI journal `.optidx-desktop-framegen.json` |
 
 Native installers download through `downloads.Client` (one cache, digest
 checks), require Windows x64 PE payloads, write through `assets.deploy`

@@ -413,6 +413,11 @@ def deploy_extra(game, repository, key, preferences, source=None, refresh=False)
             raise ValueError(
                 "The DOF fix requires UE 5.0–5.6 and 64-bit; set the UE version override when detection is inconclusive"
             )
+    if item["kind"] in {"mfg_asi", "fg_provider"}:
+        from . import framegen_tools
+
+        path, metadata = payload(Client(repository.directory), item, refresh)
+        return framegen_tools.deploy(game, repository, key, item, preferences, path, metadata)
     path, metadata = payload(Client(repository.directory), item, refresh)
     if item["kind"] == "addon":
         if path.read_bytes()[:2] == b"MZ" and not path.name.lower().endswith(
@@ -559,9 +564,14 @@ def run_feature(game, action, preferences, repository, options):
                     "requires", []
                 ):
                     raise ValueError("Remove dependent shader pack first: " + group)
-        return assets.remove(
+        result = assets.remove(
             Path(game.root) if options.get("scope") == "root" else game.target, options["group"]
         )
+        if options["group"].startswith("extra:"):
+            from .framegen_tools import restore_provider
+
+            restore_provider(game, options["group"])
+        return result
     if action == "toggle_asset":
         if options["group"].startswith("upscaler:"):
             raise ValueError(

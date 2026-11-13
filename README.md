@@ -29,7 +29,7 @@ Find your games, choose the components you want, install them before playing, an
 - **A persistent workspace:** per-game drafts, saved layouts, fast navigation, accelerated smooth scrolling and an optional reduced-motion mode.
 - **Dark, Light or System:** use white accents on a near-black blue background, use a light palette, or follow your actual Qt colors, including custom KDE color schemes.
 
-Optional tools include frame limiters, OptiPatcher, RE Framework, an eligible Unreal Engine DOF fix and experimental neural-rendering adapters. See [feature coverage and limitations](docs/RHI_PARITY.md) for the detailed breakdown.
+Optional tools include frame limiters, OptiPatcher, RE Framework, an eligible Unreal Engine DOF fix, experimental neural-rendering adapters and OptiScaler frame-generation tools (see below). See [feature coverage and limitations](docs/RHI_PARITY.md) for the detailed breakdown.
 
 ## Download and run
 
@@ -120,10 +120,9 @@ what you want installed: Cyboman Exact, retrained Lossy, older Lossy2, Lite Exac
 Lite Lossy, HelixSR FSR 4 and/or HelixSR DLSS Model E. These choices are saved per
 game and in drafts. Saving does not install files.
 
-First install a capable OptiScaler build. Under **Component download sources and
-advanced detection**, select **Upstream nightly (custom upscalers)**, then install
-OptiScaler with the normal component action. This source uses the official
-`optiscaler/OptiScaler-nightly` repository independently of the configured fork.
+First install a capable OptiScaler build. Nightly (and the backend default) now
+use the official `optiscaler/OptiScaler-nightly` repository, so install or update
+OptiScaler with the normal component action.
 Custom deployment checks the installed DLL for the loader capability; stable
 0.9.4 is unsupported. Initial custom support is for x64 DX12 games; gameplay
 compatibility is not established by detection.
@@ -157,6 +156,39 @@ removes just those managed groups; if a removed variant was the saved DX12
 default, its setting returns to `auto`. Full setup removal also removes the groups.
 Installed variants participate in managed updates with per-group rollback and
 exclusions, even when unchecked; local sources must remain available to update.
+
+### OptiScaler source, OptiDX preset and frame-generation tools
+
+OptiDX no longer downloads the `Cha1N1/OptiScaler` fork. Nightly installs and
+update checks use upstream `optiscaler/OptiScaler-nightly`; installations and
+profiles that recorded the fork are redirected there on their next update. An
+explicitly entered other repository is kept.
+
+The fork's own changes are now separate, optional pieces:
+
+- **OptiDX configuration preset** (Installation → Advanced: edit INI / apply an
+  OptiScaler configuration preset): sets only `Dx12Upscaler=ffx`,
+  `FGInput=dlssg`, `FGOutput=xefg` and `[XeFG] InterpolationCount=5` (up to 6X),
+  the fork's former INI defaults. Nothing else in `OptiScaler.ini` changes.
+- **Optional tools → Frame generation tools for OptiScaler**, each with its own
+  Install / custom package / Remove buttons and its own update entry:
+  - [MFG Unlocker](https://github.com/dashdogy/MFG-Unlocker): installed as
+    `OptiScaler/plugins/MFGUnlocker.asi` with `LoadAsiPlugins=true`. A copy that
+    an old fork package shipped is adopted instead of reported as a conflict.
+  - [XeMFG XMX](https://github.com/realdody/dlssg-to-xefg-xmx) (DX12),
+    [dlssg-to-xefg](https://github.com/FakeMichau/dlssg-to-xefg) and
+    [ANR FG](https://github.com/apex-compute/ANR) (the small `-addon` package):
+    custom DLSSG providers in `OptiScaler/custom/<name>/dlssg`. They need an
+    OptiScaler build with custom frame-generation providers (checked in the
+    installed DLL). The first install sets `FGInput=nvngxfg` and
+    `FGNvngxReplacement=<name>`; Remove restores the previous values only while
+    that provider is still selected. Updates keep an edited `nr_fg.ini`.
+
+Bundled installer scripts and packages that carry their own OptiScaler build are
+not used. The XeFGUnlock plugin is retired: upstream XeFG supports
+`InterpolationCount` up to 5 natively. Package checks do not establish gameplay
+compatibility; MFG Unlocker's XeMFG-as-provider mode needs its authors'
+OptiScaler build and is not configured by the app.
 
 ### Launch settings
 

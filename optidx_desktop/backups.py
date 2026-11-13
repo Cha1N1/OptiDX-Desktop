@@ -40,6 +40,7 @@ PROXIES.update(
         ".optidx-desktop-versions.json",
         ".optidx-desktop-settings.json",
         ".optidx-desktop-loader.json",
+        ".optidx-desktop-framegen.json",
         "relimiter.ini",
         "displaycommander.ini",
         "dxvk.conf",
@@ -308,6 +309,7 @@ def verify_snapshot(folder, game):
         ".optidx-desktop-versions.json",
         ".optidx-desktop-settings.json",
         ".optidx-desktop-loader.json",
+        ".optidx-desktop-framegen.json",
         ".optidx-ue-hdr.json",
     }
     currently_owned.update(name for name in journals if (target / name).is_file())

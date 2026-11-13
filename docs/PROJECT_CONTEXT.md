@@ -3,6 +3,41 @@
 This is the continuation record for the standalone Linux desktop application.
 Use release notes for shipped changes and focused reports for detailed findings.
 
+## Fork retirement and frame-generation tools — 2026-11-13
+
+The user no longer maintains the `Cha1N1/OptiScaler` fork. Source backup:
+`/home/DwE/project-backups/OptiDX-Desktop-before-fork-retirement-20261113-0127.tar.gz`.
+
+- OptiScaler source: `channels.optiscaler_source` is the single resolver for
+  installs and update checks. Default/Nightly use `optiscaler/OptiScaler-nightly`;
+  `RETIRED_OPTISCALER_REPOSITORIES` redirects recorded or entered fork repos; other
+  explicit repos are kept; a recorded repo is reused only for the same channel.
+  Desktop now always resolves the release itself (no backend-default path), so the
+  version record names the repository actually used. Backend `REPO_OPTISCALER`
+  changed to upstream (SNAPSHOT updated, upstream provenance unchanged).
+- The fork's INI changes (Dx12Upscaler=ffx, FGInput=dlssg, FGOutput=xefg,
+  [XeFG] InterpolationCount=5) are `templates.BUILTIN["optidx"]`, generated
+  locally and applied explicitly; unlike RHI templates it may set [FrameGen].
+- The fork bundled MFGUnlocker.asi (and an XeFGUnlock plugin, now obsolete since
+  upstream XeFG has InterpolationCount). Replaced by optional tools in
+  `framegen_tools.py` (declared in `catalog.FRAMEGEN_TOOLS`, merged into EXTRAS):
+  MFG Unlocker → `OptiScaler/plugins/MFGUnlocker.asi` (transfers ownership from
+  `backend:optiscaler` for fork-era copies, LoadAsiPlugins=true); XeMFG XMX,
+  dlssg-to-xefg, ANR FG → `OptiScaler/custom/<folder>/dlssg` (only the provider
+  tree; x64 + NVSDK_NGX_D3D12 export check; installed-DLL capability marker
+  "isn't a replacement or a folder with dlssg in"). First install journals and
+  sets FGInput=nvngxfg/FGNvngxReplacement; removal restores only while that
+  provider is still active, hands originals to a stacked provider otherwise,
+  never restores a removed provider's name, and prunes empty folders. Refresh
+  keeps edited *.ini. ANR's `-full` package (own OptiScaler) and install scripts
+  are deliberately unused; MFG Unlocker's FGNvngxReplacement=MFGUnlocker mode
+  needs dashdogy's OptiScaler build and is not configured.
+
+Validation: 11 new regression tests; all 278 tests pass in source; Black/Ruff on
+changed files. Real release archives (MFG Unlocker v1.7.1, dlssg-to-xefg-xmx
+build-10, dlssg-to-xefg build-6, ANR FG V.B15 addon) map and pass PE/export
+checks in scratch only. No real game writes, gameplay or Wine verification.
+
 ## Architecture and robustness pass — 2026-11-13
 
 Implemented the agreed Tier 1/Tier 2 items plus selected Tier 3 items; the

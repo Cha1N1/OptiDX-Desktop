@@ -63,10 +63,10 @@ class OptionalToolsPage:
             "optiscaler_channel",
             "OptiScaler channel",
             [
-                ("Backend default", ""),
+                ("Backend default (upstream nightly)", ""),
                 ("Stable", "stable"),
-                ("Nightly (configured fork)", "nightly"),
-                ("Upstream nightly (custom upscalers)", "upstream_nightly"),
+                ("Nightly (upstream OptiScaler-nightly)", "nightly"),
+                ("Upstream nightly (same as Nightly)", "upstream_nightly"),
                 ("Custom archive", "custom"),
             ],
         )
@@ -141,6 +141,9 @@ class OptionalToolsPage:
         from ..templates import TEMPLATES
 
         self.gpu_template = QComboBox()
+        self.gpu_template.addItem(
+            "OptiDX configuration preset · FFX upscaler, DLSS FG inputs → XeFG up to 6X", "optidx"
+        )
         labels = {
             "nvidia": "NVIDIA GPU",
             "amd-dlss": "AMD GPU · RHI DLSS preset",
@@ -151,7 +154,7 @@ class OptionalToolsPage:
             self.gpu_template.addItem(labels[gpu] + " · " + channel.title() + " configuration", key)
         config.addWidget(
             help_label(
-                "Optional RHI OptiScaler.ini presets. GPU/DLSS names are RHI’s preset labels. Stable/Nightly identifies the configuration variant. Preview the INI before applying it. This does not download a DLSS DLL or change the selected component release. Applying a preset changes OptiScaler settings while preserving library paths and explicit frame-generation choices."
+                "Optional OptiScaler.ini presets. The OptiDX preset holds the settings the former Cha1N1 OptiScaler fork shipped: Dx12Upscaler=ffx, FGInput=dlssg, FGOutput=xefg and [XeFG] InterpolationCount=5; it changes only those keys. RHI presets: GPU/DLSS names are RHI’s labels, Stable/Nightly identifies the configuration variant, and they keep library paths and explicit frame-generation choices. Preview the INI before applying it. No preset downloads a DLL or changes the selected component release."
             )
         )
         config.addWidget(self.gpu_template)
@@ -170,11 +173,25 @@ class OptionalToolsPage:
             )
         )
         self.extra_sources = {}
+        from ..catalog import FRAMEGEN_TOOLS
+
+        framegen = None
         for key, item in EXTRAS.items():
+            if key in FRAMEGEN_TOOLS and framegen is None:
+                framegen = section(tools, "Frame generation tools for OptiScaler", expanded=True)
+                framegen.addWidget(
+                    help_label(
+                        "Each needs OptiScaler installed. MFG Unlocker installs as OptiScaler/plugins/MFGUnlocker.asi and turns on ASI plugin loading. XeMFG XMX, dlssg-to-xefg and ANR FG install as custom DLSSG providers in OptiScaler/custom/<name>/dlssg and need a current upstream nightly; the first install of a provider sets FGInput=nvngxfg and FGNvngxReplacement to it, and Remove puts back the previous values while they are unchanged. Switch providers later in OptiScaler's menu."
+                    )
+                )
+            layout = framegen if key in FRAMEGEN_TOOLS else tools
             row = QHBoxLayout()
             row.addWidget(QLabel(item["label"]), 1)
             row.addWidget(
-                push("Install " + item["label"], lambda checked=False, k=key: self.install_extra(k))
+                push(
+                    "Install " + item.get("short", item["label"]),
+                    lambda checked=False, k=key: self.install_extra(k),
+                )
             )
             row.addWidget(
                 push("Choose custom package", lambda checked=False, k=key: self.custom_extra(k))
@@ -186,7 +203,7 @@ class OptionalToolsPage:
                 )
             )
             layout.addLayout(row)
-        layout = section(layout, "Advanced package selection", expanded=False)
+        layout = section(tools, "Advanced package selection", expanded=False)
         form = QFormLayout()
         self.line(form, "ue_version", "UE version override", "e.g. 5.4; used for DOF eligibility")
         self.line(
@@ -264,7 +281,7 @@ class OptionalToolsPage:
             self.window,
             "Custom " + EXTRAS[key]["label"],
             str(Path.home()),
-            "Packages (*.zip *.7z *.addon64 *.addon32 *.asi)",
+            "Packages (*.zip *.7z *.addon64 *.addon32 *.asi *.dll)",
         )
         if path:
             self.extra_sources[key] = {"path": path, "version": "Custom"}

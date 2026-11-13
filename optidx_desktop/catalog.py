@@ -104,6 +104,45 @@ EXTRAS = {
         "kind": "addon",
     },
 }
+# Frame-generation tools formerly bundled by the retired Cha1N1/OptiScaler fork.
+# Installed by framegen_tools; each one is an independent optional install.
+FRAMEGEN_TOOLS = {
+    "mfg_unlocker": {
+        "label": "MFG Unlocker (OptiScaler plugin)",
+        "short": "MFG Unlocker",
+        "repo": "dashdogy/MFG-Unlocker",
+        "pattern": r"^MFGUnlocker-v[\w.-]+\.zip$",
+        "kind": "mfg_asi",
+    },
+    "xemfg_xmx": {
+        "label": "XeMFG XMX (dlssg-to-xefg-xmx)",
+        "short": "XeMFG XMX",
+        "repo": "realdody/dlssg-to-xefg-xmx",
+        "pattern": r"^dlssg-to-xefg-\d+\.zip$",
+        "kind": "fg_provider",
+        "folder": "XeMFG XMX",
+        "apis": ("DX12", "DXGI"),
+    },
+    "dlssg_to_xefg": {
+        "label": "dlssg-to-xefg (XeFG as DLSS FG)",
+        "short": "dlssg-to-xefg",
+        "repo": "FakeMichau/dlssg-to-xefg",
+        "pattern": r"^dlssg-to-xefg-\d+\.zip$",
+        "kind": "fg_provider",
+        "folder": "dlssg-to-xefg",
+        "apis": ("DX12", "DXGI", "Vulkan"),
+    },
+    "anr_fg": {
+        "label": "ANR FG (Apex Neural Rendering)",
+        "short": "ANR FG",
+        "repo": "apex-compute/ANR",
+        "pattern": r"^anr-fg-.+-addon\.zip$",
+        "kind": "fg_provider",
+        "folder": "Apex Neural Rendering FG",
+        "apis": ("DX12", "DXGI", "Vulkan"),
+    },
+}
+EXTRAS.update(FRAMEGEN_TOOLS)
 DLSS_FILES = {
     "dlss": "nvngx_dlss.dll",
     "dlssd": "nvngx_dlssd.dll",

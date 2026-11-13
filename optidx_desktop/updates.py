@@ -95,21 +95,11 @@ def check_updates(game, repository, preferences, client=None):
     if "optiscaler" in versions and "optiscaler" not in exclusions:
         old = versions["optiscaler"]
         try:
+            from .channels import optiscaler_source
+
+            repo, channel = optiscaler_source(preferences, old)
             release = client.release_asset(
-                (
-                    "optiscaler/OptiScaler-nightly"
-                    if preferences.get("optiscaler_channel") == "upstream_nightly"
-                    else preferences.get("optiscaler_repo")
-                    or old.get("repository", "optiscaler/OptiScaler")
-                ),
-                r"\.7z$",
-                (
-                    "nightly"
-                    if preferences.get("optiscaler_channel") == "upstream_nightly"
-                    else preferences.get("optiscaler_channel", old.get("channel", "nightly"))
-                ),
-                preferences.get("optiscaler_tag", ""),
-                True,
+                repo, r"\.7z$", channel, preferences.get("optiscaler_tag", ""), True
             )
             records.append(
                 {
